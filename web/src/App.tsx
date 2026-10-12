@@ -184,7 +184,7 @@ export default function App() {
               width="38"
               height="38"
             />
-            <span>奶龙群列表</span>
+            <span>naiList</span>
           </a>
           <div className="nav-right">
             <a
@@ -272,9 +272,14 @@ export default function App() {
         <section className="page-heading">
           <div>
             <h1>
-              {manage ? "管理奶群" : "奶群列表"}
+              {manage ? "管理奶群" : "奶龙群列表, 防止迷路"}
               <span className="title-dot">.</span>
             </h1>
+            {!manage && (
+              <p>
+                登录后可上传与管理自己的奶群; 所有信息由用户自行上传, 请注意甄别
+              </p>
+            )}
           </div>
           {manage && user && (
             <button

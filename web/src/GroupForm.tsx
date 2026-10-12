@@ -78,7 +78,10 @@ export function GroupForm({
           />
         </label>
         <label>
-          关键词 <span className="optional">选填 · 逗号分隔</span>
+          关键词
+          <span className="optional">
+            选填, 逗号分隔, 可填入学校缩写等, 方便搜索
+          </span>
           <input
             maxLength={500}
             value={input.keywords}

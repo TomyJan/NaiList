@@ -183,6 +183,12 @@ p {
   gap: 16px;
   margin-bottom: 26px;
 }
+.page-heading p {
+  margin: 10px 0 0;
+  color: #70806f;
+  font-size: 13px;
+  line-height: 1.75;
+}
 h1 {
   font-size: 32px;
   letter-spacing: -1px;
@@ -609,6 +615,7 @@ h1 {
   .avatar-button,
   .nickname,
   .list-caption,
+  .page-heading p,
   .optional,
   .delete-name {
     color: #a5b7ab;
