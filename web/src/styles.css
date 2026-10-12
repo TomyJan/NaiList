@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light dark;
   font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
   color: #1c2b23;
   background: #f7faf7;
@@ -7,6 +8,7 @@
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
 }
+
 * {
   box-sizing: border-box;
 }
@@ -596,5 +598,152 @@ h1 {
   }
   .manage-actions {
     margin-left: auto;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e3ece5;
+    background: #121a16;
+  }
+  .nav {
+    background: #18221ddd;
+    border-bottom-color: #304137;
+  }
+  .nav-link,
+  .avatar-button,
+  .nickname,
+  .list-caption,
+  .optional,
+  .delete-name {
+    color: #a5b7ab;
+  }
+  .nav-link.active {
+    color: #b6d9b2;
+  }
+  .login {
+    color: #c4e1c1;
+    background: #1c2821;
+    border-color: #41594a;
+  }
+  .avatar {
+    color: #c0dfb8;
+    background: #304635;
+  }
+  .account-menu {
+    background: #1d2922;
+    border-color: #3a4e40;
+    box-shadow: 0 12px 35px #0005;
+  }
+  .account-menu button {
+    color: #d1e2d4;
+  }
+  .account-menu button:hover,
+  .icon-button:hover {
+    background: #2b3b30;
+  }
+  .primary {
+    background: #a7d78f;
+    color: #14261a;
+  }
+  .primary:hover {
+    background: #bee5a8;
+  }
+  .secondary {
+    background: #2b3b30;
+    color: #d0e3d1;
+  }
+  .danger {
+    background: #a63f36;
+    color: #fff;
+  }
+  .search-box,
+  .group-row {
+    background: #1c2821;
+    border-color: #344a3b;
+    box-shadow: none;
+  }
+  .search-box {
+    color: #9cb29f;
+  }
+  .search-box input,
+  .modal input {
+    color: #e0eae2;
+  }
+  .search-box input::placeholder,
+  .modal input::placeholder {
+    color: #a1b2a4;
+  }
+  .search-box:focus-within,
+  .modal input:focus {
+    border-color: #a7d78f;
+    box-shadow: 0 0 0 3px #a7d78f25;
+  }
+  .group-row:hover {
+    border-color: #607e60;
+  }
+  .group-icon {
+    background: #30422c;
+    color: #c5e2a7;
+  }
+  .number-button,
+  .icon-button {
+    color: #b3c9b6;
+  }
+  .number-button:hover {
+    color: #dbf1d7;
+  }
+  .number-button svg {
+    color: #9db59f;
+  }
+  .join-button {
+    color: #c4e3a8;
+    background: #30422c;
+  }
+  .join-button:hover {
+    background: #405637;
+  }
+  .manage-actions {
+    border-left-color: #3c5041;
+  }
+  .delete-button,
+  .error {
+    color: #f0a599;
+  }
+  .delete-button:hover {
+    background: #482b28;
+  }
+  .empty {
+    color: #a9bcad;
+    border-color: #405643;
+  }
+  .skeleton-row {
+    background-image: linear-gradient(
+      100deg,
+      #233128 30%,
+      #304137 50%,
+      #233128 70%
+    );
+  }
+  .auth-skeleton {
+    background: #304137;
+  }
+  .toast {
+    background: #a7d78f;
+    color: #14261a;
+    box-shadow: 0 7px 30px #0005;
+  }
+  .modal {
+    color: #e3ece5;
+    background: #1c2821;
+    border-color: #41594a;
+    box-shadow: 0 25px 100px #0008;
+  }
+  .modal::backdrop {
+    background: #050c09aa;
+  }
+  .modal input {
+    background: #152019;
+    border-color: #41594a;
   }
 }

@@ -8,5 +8,9 @@ export default defineConfig({
     headless: true,
   },
   reporter: "list",
+  projects: [
+    { name: "light", use: { colorScheme: "light" } },
+    { name: "dark", use: { colorScheme: "dark" } },
+  ],
   workers: 1,
 });

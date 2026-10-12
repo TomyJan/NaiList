@@ -1,6 +1,6 @@
 # 奶龙群列表
 
-Go + PostgreSQL + React / TypeScript。
+Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。
 
 ## 部署
 

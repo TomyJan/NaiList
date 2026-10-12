@@ -5,6 +5,7 @@
 
 ## 技术方案
 - 前端：React + TypeScript + Vite + 原生 CSS，响应式单列列表，不引入重型组件库。
+- 使用 `prefers-color-scheme` 自动跟随系统深浅色，覆盖列表、导航、菜单、弹窗及加载/提示状态。
 - 后端：Go + chi，HTTP/认证与群数据校验、PostgreSQL 数据访问分离。
 - 数据库：PostgreSQL。
 - 登录：QQ 互联 OAuth，服务端 session（HttpOnly、SameSite）。
