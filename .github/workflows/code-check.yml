@@ -161,8 +161,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
+        goos: [linux]
+        goarch: [amd64]
+        # 恢复其他平台时使用以下矩阵：
+        # goos: [linux, darwin, windows]
+        # goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v7
         with:
