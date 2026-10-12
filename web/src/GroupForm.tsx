@@ -6,6 +6,7 @@ import {
   validateGroupInput,
 } from "./group-input";
 import { readGroupDraft, writeGroupDraft } from "./group-drafts";
+import { notify } from "./notifications";
 import type { Group, GroupInput } from "./types";
 
 export function GroupForm({
@@ -26,7 +27,6 @@ export function GroupForm({
   const [input, setInput] = useState<GroupInput>(
     () => readGroupDraft(accountID, group?.id) ?? original,
   );
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
   useEffect(() => {
@@ -45,14 +45,16 @@ export function GroupForm({
   const readQRCode = async (file: File) => {
     const generation = ++qrGeneration.current;
     setReading(true);
-    setError("");
     try {
       const { decodeGroupQRCode } = await import("./qr");
       const link = await decodeGroupQRCode(file);
-      if (qrGeneration.current === generation) field("joinUrl", link);
+      if (qrGeneration.current === generation) {
+        field("joinUrl", link);
+        notify.success("二维码已解析");
+      }
     } catch (error) {
       if (qrGeneration.current === generation)
-        setError((error as Error).message);
+        notify.error((error as Error).message);
     } finally {
       if (qrGeneration.current === generation) setReading(false);
     }
@@ -85,15 +87,14 @@ export function GroupForm({
           if (busy || reading) return;
           const validationError = validateGroupInput(input);
           if (validationError) {
-            setError(validationError);
+            notify.error(validationError);
             return;
           }
           setBusy(true);
-          setError("");
           try {
             await onSave(input);
           } catch (error) {
-            setError((error as Error).message);
+            notify.error((error as Error).message);
           } finally {
             setBusy(false);
           }
@@ -191,11 +192,6 @@ export function GroupForm({
             }}
           />
         </div>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
         <div className="modal-actions">
           <button
             type="button"
@@ -205,7 +201,6 @@ export function GroupForm({
               qrGeneration.current++;
               setReading(false);
               setInput({ ...original });
-              setError("");
             }}
           >
             <Undo2 size={16} />
@@ -239,7 +234,6 @@ export function DeleteDialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   useEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
@@ -259,11 +253,6 @@ export function DeleteDialog({
       <p className="delete-name">
         {group.organization} · {group.qqNumber}
       </p>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
       <div className="modal-actions">
         <button className="secondary" onClick={onClose} disabled={busy}>
           取消
@@ -276,7 +265,7 @@ export function DeleteDialog({
             try {
               await onDelete();
             } catch (e) {
-              setError((e as Error).message);
+              notify.error((e as Error).message);
             } finally {
               setBusy(false);
             }

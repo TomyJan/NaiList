@@ -17,6 +17,7 @@ import { filterGroups } from "./search";
 import { GroupForm, DeleteDialog } from "./GroupForm";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { AccountBindings, LoginDialog } from "./Account";
+import { Notifications, notify } from "./notifications";
 import { SITE_VERSION } from "./runtime";
 import type { Group, GroupInput, User, LoginProvider } from "./types";
 
@@ -32,13 +33,12 @@ export default function App() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [editor, setEditor] = useState<{ group: Group | null } | null>(null);
   const [deleting, setDeleting] = useState<Group | null>(null);
-  const [toast, setToast] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const navigate = (target: string) => {
@@ -60,7 +60,7 @@ export default function App() {
     api<User | null>("/api/me", { signal: controller.signal })
       .then(setUser)
       .catch((e) => {
-        if (e.name !== "AbortError") setToast("登录状态加载失败");
+        if (e.name !== "AbortError") notify.error("登录状态加载失败");
       })
       .finally(() => {
         if (!controller.signal.aborted) setAuthLoaded(true);
@@ -68,16 +68,19 @@ export default function App() {
     api<LoginProvider[]>("/api/auth/providers", { signal: controller.signal })
       .then((data) => setProviders(Array.isArray(data) ? data : []))
       .catch((error) => {
-        if (error.name !== "AbortError") setProviders(null);
+        if (error.name !== "AbortError") {
+          setProviders(null);
+          notify.error("登录方式加载失败，请重试");
+        }
       });
     const params = new URLSearchParams(location.search);
     if (params.has("bound")) {
-      setToast("已绑定");
+      notify.success("已绑定");
       history.replaceState(null, "", location.pathname);
     }
     const authError = params.get("auth_error");
     if (authError) {
-      setToast(
+      notify.error(
         (
           {
             unconfigured: "登录方式未配置",
@@ -100,13 +103,16 @@ export default function App() {
     }
     const controller = new AbortController();
     setLoading(true);
-    setError("");
+    setLoadFailed(false);
     api<Group[]>(manage ? "/api/my/groups" : "/api/groups", {
       signal: controller.signal,
     })
       .then(setGroups)
       .catch((e) => {
-        if (e.name !== "AbortError") setError(e.message);
+        if (e.name !== "AbortError") {
+          setLoadFailed(true);
+          notify.error(e.message);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -114,16 +120,20 @@ export default function App() {
     return () => controller.abort();
   }, [manage, user, revision, authLoaded]);
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(
-      () => {
-        setToast("");
-        setCopied(null);
-      },
-      toast.length > 20 ? 8000 : 2600,
-    );
+    if (copied === null) return;
+    const timer = setTimeout(() => setCopied(null), 2600);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [copied]);
+  const retryProviders = async () => {
+    setProviders(undefined);
+    try {
+      const data = await api<LoginProvider[]>("/api/auth/providers");
+      setProviders(Array.isArray(data) ? data : []);
+    } catch {
+      setProviders(null);
+      notify.error("登录方式加载失败，请重试");
+    }
+  };
   useEffect(() => {
     if (!menu) return;
     const close = (event: PointerEvent) => {
@@ -150,7 +160,10 @@ export default function App() {
     clearGroupDraft(user.id, group?.id);
     setEditor(null);
     setRevision((v) => v + 1);
-    setToast("已保存。群信息可能需要一分钟才能更新到首页, 请耐心等待");
+    notify.success(
+      "已保存。群信息可能需要一分钟才能更新到首页, 请耐心等待",
+      8000,
+    );
   };
   const remove = async () => {
     if (!user || !deleting) return;
@@ -161,15 +174,15 @@ export default function App() {
     clearGroupDraft(user.id, deleting.id);
     setDeleting(null);
     setRevision((v) => v + 1);
-    setToast("已删除");
+    notify.success("已删除");
   };
   const copy = async (group: Group) => {
     try {
       await navigator.clipboard.writeText(group.qqNumber);
       setCopied(group.id);
-      setToast("已复制");
+      notify.success("已复制");
     } catch {
-      setToast("复制失败，请手动复制");
+      notify.error("复制失败，请手动复制");
     }
   };
   return (
@@ -251,9 +264,9 @@ export default function App() {
                           clearAccountDrafts(user.id);
                           setUser(null);
                           navigate("/");
-                          setToast("已退出");
+                          notify.success("已退出");
                         } catch (e) {
-                          setToast((e as Error).message);
+                          notify.error((e as Error).message);
                         } finally {
                           setLogoutBusy(false);
                         }
@@ -277,7 +290,11 @@ export default function App() {
       </header>
       <main className="main">
         {manage && user && (
-          <AccountBindings user={user} providers={providers} />
+          <AccountBindings
+            user={user}
+            providers={providers}
+            onRetry={retryProviders}
+          />
         )}
         <section className="page-heading">
           <div>
@@ -332,9 +349,8 @@ export default function App() {
             <div className="list-caption">
               <span>{loading ? "加载中" : `${visible.length} 个奶群`}</span>
             </div>
-            {error ? (
-              <div role="alert" className="empty">
-                <p>{error}</p>
+            {loadFailed ? (
+              <div className="empty">
                 <button
                   className="secondary"
                   onClick={() => setRevision((v) => v + 1)}
@@ -445,13 +461,10 @@ export default function App() {
         <LoginDialog
           providers={providers}
           onClose={() => setLoginDialog(false)}
+          onRetry={retryProviders}
         />
       )}
-      {toast && (
-        <div className="toast" role="status">
-          {toast}
-        </div>
-      )}
+      <Notifications />
       {editor && user && (
         <GroupForm
           accountID={user.id}

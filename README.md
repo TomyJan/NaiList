@@ -110,6 +110,8 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 首页页脚提供项目与反馈支持入口。添加、编辑成功后提醒首页群信息可能需一分钟更新，以适配 `/api/groups` 的 CDN 缓存；登录、管理与写入接口请勿缓存。
 
+操作结果和错误使用底部居中的 Toast，支持堆叠、自动消失、手动关闭与系统深浅色。保存成功的缓存提醒保留 8 秒；表单失败保留输入，弹窗关闭后通知继续显示。
+
 ```sh
 go test ./...
 go vet ./...

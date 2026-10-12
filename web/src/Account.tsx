@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, LogIn, ShieldCheck, X } from "lucide-react";
 import { api, writeOptions } from "./api";
+import { notify } from "./notifications";
 import type { LoginProvider, User } from "./types";
 
 function ProviderIcon({ provider }: { provider: LoginProvider }) {
@@ -26,9 +27,11 @@ function ProviderIcon({ provider }: { provider: LoginProvider }) {
 export function LoginDialog({
   providers,
   onClose,
+  onRetry,
 }: {
   providers: LoginProvider[] | null | undefined;
   onClose: () => void;
+  onRetry: () => Promise<void>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -55,7 +58,9 @@ export function LoginDialog({
       {providers === undefined ? (
         <p>加载中</p>
       ) : providers === null ? (
-        <p>登录方式加载失败，请刷新</p>
+        <button className="secondary" onClick={onRetry}>
+          重试
+        </button>
       ) : providers.length === 0 ? (
         <p>暂无可用登录方式</p>
       ) : (
@@ -79,13 +84,14 @@ export function LoginDialog({
 export function AccountBindings({
   user,
   providers,
+  onRetry,
 }: {
   user: User;
+  onRetry: () => Promise<void>;
   providers: LoginProvider[] | null | undefined;
 }) {
   const [pending, setPending] = useState<LoginProvider | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const ref = useRef<HTMLDialogElement>(null);
   const identities = user.identities || [];
   const choices = [...(providers || [])];
@@ -107,7 +113,6 @@ export function AccountBindings({
   const bind = async () => {
     if (!pending) return;
     setBusy(true);
-    setError("");
     try {
       const result = await api<{ url: string }>(
         `/api/auth/bind/${pending.id}`,
@@ -115,7 +120,7 @@ export function AccountBindings({
       );
       location.assign(result.url);
     } catch (error) {
-      setError((error as Error).message);
+      notify.error((error as Error).message);
       setBusy(false);
     }
   };
@@ -128,7 +133,11 @@ export function AccountBindings({
         </h2>
         <span>绑定后不可解绑</span>
       </div>
-      {providers === null && <p className="error">登录方式加载失败，请刷新</p>}
+      {providers === null && (
+        <button className="secondary" onClick={onRetry}>
+          重试登录方式
+        </button>
+      )}
       <div className="binding-list">
         {choices.map((provider) => {
           const identity = identities.find((i) => i.providerId === provider.id);
@@ -148,7 +157,6 @@ export function AccountBindings({
                 <button
                   className="secondary"
                   onClick={() => {
-                    setError("");
                     setPending(provider);
                   }}
                   aria-label={`绑定 ${provider.name}`}
@@ -182,11 +190,6 @@ export function AccountBindings({
             </button>
           </div>
           <p>绑定后可用于登录，不可解绑。</p>
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
           <div className="modal-actions">
             <button
               className="secondary"

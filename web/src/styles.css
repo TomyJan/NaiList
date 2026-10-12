@@ -425,23 +425,6 @@ h1 {
   background: #eaf0e9;
   border-radius: 25px;
 }
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 30px;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 32px);
-  padding: 12px 22px;
-  border-radius: 11px;
-  background: #214e37;
-  color: #fff;
-  box-shadow: 0 7px 30px #123b3222;
-  z-index: 50;
-  white-space: normal;
-  text-align: center;
-  line-height: 1.6;
-}
 .modal {
   border: 1px solid #dfe8dd;
   border-radius: 20px;
@@ -550,10 +533,6 @@ h1 {
   gap: 9px;
   margin-top: 24px;
 }
-.error {
-  color: #b55447;
-  line-height: 1.6;
-}
 .delete-name {
   margin-top: 15px;
   color: #788675;
@@ -561,9 +540,6 @@ h1 {
 }
 .delete-modal {
   padding: 30px;
-}
-.delete-modal .error {
-  margin-top: 14px;
 }
 @keyframes shimmer {
   to {
@@ -643,9 +619,6 @@ h1 {
   .modal {
     padding: 23px;
   }
-  .toast {
-    bottom: 20px;
-  }
 }
 @media (max-width: 380px) {
   .nav-inner {
@@ -671,7 +644,7 @@ h1 {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,
+  *:not(.Toastify__progress-bar--animated),
   *::before,
   *::after {
     animation: none !important;
@@ -800,8 +773,7 @@ h1 {
   .manage-actions {
     border-left-color: #3c5041;
   }
-  .delete-button,
-  .error {
+  .delete-button {
     color: #f0a599;
   }
   .delete-button:hover {
@@ -821,11 +793,6 @@ h1 {
   }
   .auth-skeleton {
     background: #304137;
-  }
-  .toast {
-    background: #a7d78f;
-    color: #14261a;
-    box-shadow: 0 7px 30px #0005;
   }
   .modal {
     color: #e3ece5;
@@ -966,5 +933,133 @@ h1 {
   }
   .provider-login:hover {
     background: #263629;
+  }
+}
+
+/* Toastify's unstyled entry avoids injecting styles under the site's CSP. */
+.app-toasts.Toastify__toast-container {
+  width: min(420px, calc(100vw - 32px));
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  gap: 10px;
+  pointer-events: none;
+  --toastify-font-family: MiSans, "Microsoft YaHei", system-ui, sans-serif;
+  --toastify-color-success: #478b42;
+  --toastify-color-error: #c35345;
+  --toastify-color-info: #477b94;
+}
+.app-toast.Toastify__toast {
+  width: 100%;
+  margin: 0;
+  padding: 15px 46px 15px 17px;
+  min-height: 56px;
+  border: 1px solid #dce7d9;
+  border-radius: 14px;
+  background: #fff;
+  color: #253c2e;
+  box-shadow: 0 8px 28px #16351e1a;
+  font-size: 13px;
+  line-height: 1.65;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+.app-toast .Toastify__toast-icon {
+  width: 20px;
+  margin-inline-end: 11px;
+}
+.app-toast.Toastify__toast--success .Toastify__toast-icon {
+  color: var(--toastify-color-success);
+}
+.app-toast.Toastify__toast--error .Toastify__toast-icon {
+  color: var(--toastify-color-error);
+}
+.toast-close {
+  pointer-events: auto;
+  position: absolute;
+  inset: 8px 7px auto auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #7b8a7e;
+}
+.toast-close:hover {
+  background: #edf3eb;
+  color: #253c2e;
+}
+.toast-close:focus-visible {
+  outline: 2px solid #75a65b;
+  outline-offset: 1px;
+}
+.app-toast .Toastify__progress-bar--wrp {
+  height: 3px;
+  border-radius: 0;
+  inset: auto 12px 0;
+  width: auto;
+}
+.toast-enter {
+  animation: toast-enter 180ms ease-out both;
+}
+.toast-exit {
+  animation: toast-exit 140ms ease-in both;
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes toast-exit {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .app-toasts.Toastify__toast-container {
+    --toastify-color-success: #a7d78f;
+    --toastify-color-error: #f0a599;
+    --toastify-color-info: #9dc9df;
+  }
+  .app-toast.Toastify__toast {
+    background: #223128;
+    color: #e3ece5;
+    border-color: #41594a;
+    box-shadow: 0 8px 28px #0005;
+  }
+  .toast-close {
+    color: #abc0ae;
+  }
+  .toast-close:hover {
+    background: #304137;
+    color: #e3ece5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Toastify uses animationend for lifecycle and auto-dismiss timers. */
+  .toast-enter,
+  .toast-exit {
+    animation-name: toast-still !important;
+    animation-duration: 1ms !important;
+  }
+  .app-toast .Toastify__progress-bar--wrp {
+    visibility: hidden;
+  }
+  @keyframes toast-still {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }

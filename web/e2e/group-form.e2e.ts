@@ -199,14 +199,14 @@ test("粘贴分享文本、浏览器解析二维码及失败保留链接", async
     .setInputFiles(
       fileURLToPath(new URL("../public/nailong.png", import.meta.url)),
     );
-  await expect(page.getByRole("alert")).toContainText("未识别到二维码");
+  await expect(page.getByRole("alert").last()).toContainText("未识别到二维码");
   await expect(link).toHaveValue("https://qm.qq.com/q/AjLVv044nu");
   await page
     .locator('input[type="file"]')
     .setInputFiles(
       fileURLToPath(new URL("./fixtures/other-qr.png", import.meta.url)),
     );
-  await expect(page.getByRole("alert")).toContainText("有效 QQ 群链接");
+  await expect(page.getByRole("alert").last()).toContainText("有效 QQ 群链接");
   await expect(link).toHaveValue("https://qm.qq.com/q/AjLVv044nu");
   expect(state.writes).toHaveLength(0);
   for (const width of [320, 390, 768]) {
@@ -246,7 +246,7 @@ test("前端校验拦截非法输入，不发写入请求", async ({ page }) => 
   ]) {
     await page.getByLabel(field, { exact: true }).fill(invalid);
     await page.getByRole("button", { name: "保存", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText(message);
+    await expect(page.getByRole("alert").last()).toContainText(message);
     expect(state.writes).toHaveLength(0);
     await page.getByLabel(field, { exact: true }).fill(valid);
   }

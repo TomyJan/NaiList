@@ -216,14 +216,14 @@ test("管理页添加、编辑、删除、退出", async ({ page }) => {
   });
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.locator("article")).toHaveCount(4);
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.getByRole("status").last()).toContainText(
     "群信息可能需要一分钟才能更新到首页, 请耐心等待",
   );
   await page.getByRole("button", { name: "编辑 测试大学" }).click();
   await page.getByLabel("关键词").fill("简称🍐");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.getByRole("status").last()).toContainText(
     "群信息可能需要一分钟才能更新到首页, 请耐心等待",
   );
   await page.getByRole("textbox", { name: "搜索奶群" }).fill("简称🍐");
@@ -302,7 +302,9 @@ test("添加和编辑重复群号显示提示，保留输入并允许修正", as
     await dialog.getByLabel("群号", { exact: true }).fill(seed[1].qqNumber);
     await dialog.getByLabel("群链接").fill("https://qm.qq.com/q/test");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
-    await expect(dialog.getByRole("alert")).toHaveText(duplicateMessage);
+    await expect(
+      page.locator(".app-toast").filter({ hasText: duplicateMessage }).last(),
+    ).toContainText(duplicateMessage);
     await expect(dialog.getByLabel("群号", { exact: true })).toHaveValue(
       seed[1].qqNumber,
     );
