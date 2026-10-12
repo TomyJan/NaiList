@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        required: false
+        default: patch
+        options: [patch, minor, major]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Calculate release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      image: ${{ steps.version.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Require the default branch and calculate version
+        id: version
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BUMP: ${{ inputs.bump || 'patch' }}
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo 'Release must run on the default branch.' >&2
+            exit 1
+          fi
+          version=$(node scripts/release-version.mjs "$BUMP")
+          printf 'version=%s\ntag=v%s\nimage=ghcr.io/%s\n' "$version" "$version" "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Validate release source
+    needs: prepare
+    uses: ./.github/workflows/code-check.yml
+
+  binaries:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: [prepare, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Build and package application
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          mkdir -p bundle/web
+          binary=nailist
+          if [ "$GOOS" = windows ]; then binary=nailist.exe; fi
+          go build -trimpath -ldflags='-s -w' -o "bundle/$binary" ./cmd/server
+          cp -R web/dist bundle/web/dist
+          cp README.md LICENSE .env.example bundle/
+          archive="nailist-$VERSION-$GOOS-$GOARCH"
+          if [ "$GOOS" = windows ]; then
+            (cd bundle && zip -qr "../$archive.zip" .)
+          else
+            tar -czf "$archive.tar.gz" -C bundle .
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            nailist-*.tar.gz
+            nailist-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  image:
+    name: Publish release image
+    needs: [prepare, binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.tag }}
+            ${{ needs.prepare.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,mode=max,scope=release
+
+  publish:
+    name: Publish GitHub Release
+    needs: [prepare, binaries, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: release-assets
+      - name: Create checksums and publish
+        working-directory: release-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          sha256sum nailist-* > SHA256SUMS.txt
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+            if [ "$existing_sha" != "$RELEASE_SHA" ]; then
+              echo 'Existing tag points to another commit.' >&2
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" ./* --clobber
+          else
+            gh release create "$RELEASE_TAG" ./* --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes --latest
+          fi

@@ -57,3 +57,13 @@ cd web && npm test && npm run build
 ```
 
 数据库集成测试可设置专用测试库 `TEST_DATABASE_URL` 后运行 `go test ./internal/server -run TestPostgres -v`。浏览器测试需运行服务并安装 Chrome，设置 `TEST_APP_URL=http://localhost:8080` 后，在 `web` 目录执行 `npm run test:e2e`。
+
+## 自动检查与发版
+
+Dependabot 自动更新 npm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。
+
+发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；无标签时从 `web/package.json` 的 `0.1.0` 起算，首次默认发 `v0.1.1`。发版不修改前端私有包版本。
+
+检查全部通过后，发布包含前端的 Linux/macOS/Windows（amd64、arm64）压缩包及 SHA256 校验文件，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 多架构镜像。首次使用需允许仓库 Actions 写入 Packages；镜像公开下载需将 GHCR 包设为公开。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
+
+使用二进制包时，解压后设置 `DATABASE_URL`、`PUBLIC_URL` 和 QQ 环境变量，在解压目录运行 `./nailist`（Windows 为 `nailist.exe`），或通过 `WEB_DIR` 指定解压后的 `web/dist`。
