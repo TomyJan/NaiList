@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api, writeOptions } from "./api";
 import { filterGroups } from "./search";
+import { shuffleGroups } from "./group-order";
 import { GroupForm, DeleteDialog } from "./GroupForm";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { AccountBindings, LoginDialog } from "./Account";
@@ -107,7 +108,7 @@ export default function App() {
     api<Group[]>(manage ? "/api/my/groups" : "/api/groups", {
       signal: controller.signal,
     })
-      .then(setGroups)
+      .then((data) => setGroups(manage ? data : shuffleGroups(data)))
       .catch((e) => {
         if (e.name !== "AbortError") {
           setLoadFailed(true);

@@ -63,6 +63,68 @@ const seed: Group[] = [
     updatedAt: "",
   },
 ];
+
+test("首页每次加载随机排序，搜索和复制保持顺序，管理列表保持接口顺序", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => {
+    const loads = Number(sessionStorage.getItem("shuffle-test-loads") || 0);
+    sessionStorage.setItem("shuffle-test-loads", String(loads + 1));
+    Math.random = () => (loads === 0 ? 0 : 0.999999);
+  });
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        id: 1,
+        nickname: "测试用户",
+        avatarUrl: "",
+        csrfToken: "test",
+        identities: [],
+      },
+    }),
+  );
+  let fetches = 0;
+  await page.route("**/api/groups", (route) => {
+    fetches++;
+    return route.fulfill({ json: seed });
+  });
+  await page.route("**/api/my/groups", (route) =>
+    route.fulfill({ json: seed }),
+  );
+  const headings = page.locator(".group-row h2");
+  const apiOrder = seed.map((g) => g.organization);
+  await page.goto("/");
+  await expect(headings).toHaveCount(seed.length);
+  const firstOrder = await headings.allTextContents();
+  expect(firstOrder).not.toEqual(apiOrder);
+  expect([...firstOrder].sort()).toEqual([...apiOrder].sort());
+
+  const search = page.getByRole("textbox", { name: "搜索奶群" });
+  await search.fill("理工");
+  await expect(headings).toHaveText(
+    firstOrder.filter((name) => name.includes("理工")),
+  );
+  await search.fill("");
+  await expect(headings).toHaveText(firstOrder);
+  await page.getByRole("button", { name: "复制群号 729493028" }).click();
+  await expect(page.getByRole("status")).toHaveText("已复制");
+  await expect(headings).toHaveText(firstOrder);
+  expect(fetches).toBe(1);
+
+  await page.reload();
+  await expect(headings).toHaveCount(seed.length);
+  const secondOrder = await headings.allTextContents();
+  expect(secondOrder).not.toEqual(firstOrder);
+  expect([...secondOrder].sort()).toEqual([...apiOrder].sort());
+  expect(fetches).toBe(2);
+
+  await page.getByRole("button", { name: "账户菜单" }).click();
+  await page.getByRole("menuitem", { name: "管理奶群" }).click();
+  await expect(headings).toHaveText(apiOrder);
+});
+
 test("单列、隐藏关键词搜索、移动端和复制", async ({ page, context }) => {
   let fetches = 0;
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
