@@ -6,6 +6,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?请在 .env 中设置外部 PostgreSQL 连接串}
       PORT: ${PORT:-8080}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
       PUBLIC_URL: ${PUBLIC_URL:?请在 .env 中设置站点 HTTPS 根地址}
       UMAMI_SCRIPT_URL: ${UMAMI_SCRIPT_URL:-}
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}

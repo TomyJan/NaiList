@@ -32,6 +32,7 @@ func testDB(t *testing.T) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	cfg.ConnConfig.RuntimeParams["application_name"] = schema
 	db, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)

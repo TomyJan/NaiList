@@ -7,16 +7,21 @@ import {
   LogOut,
   Pencil,
   Plus,
+  RefreshCw,
+  Shuffle,
   Search,
   Settings,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
-import { api, writeOptions } from "./api";
+import { api, ApiError, writeOptions } from "./api";
 import { filterGroups } from "./search";
+import { shuffleGroups } from "./group-order";
 import { GroupForm, DeleteDialog } from "./GroupForm";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { AccountBindings, LoginDialog } from "./Account";
+import { Admin } from "./Admin";
 import { Notifications, notify } from "./notifications";
 import { SITE_VERSION } from "./runtime";
 import type { Group, GroupInput, User, LoginProvider } from "./types";
@@ -24,6 +29,12 @@ import type { Group, GroupInput, User, LoginProvider } from "./types";
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const manage = path === "/manage";
+  const adminPage = [
+    "/admin",
+    "/admin/",
+    "/admin/users",
+    "/admin/groups",
+  ].includes(path);
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [providers, setProviders] = useState<
@@ -46,11 +57,15 @@ export default function App() {
     setPath(target);
     setQuery("");
     setMenu(false);
+    setEditor(null);
+    setDeleting(null);
   };
   useEffect(() => {
     const listener = () => {
       setPath(location.pathname);
       setQuery("");
+      setEditor(null);
+      setDeleting(null);
     };
     window.addEventListener("popstate", listener);
     return () => window.removeEventListener("popstate", listener);
@@ -99,7 +114,7 @@ export default function App() {
     return () => controller.abort();
   }, []);
   useEffect(() => {
-    if (!authLoaded) return;
+    if (!authLoaded || adminPage) return;
     if (manage && !user) {
       setLoading(false);
       setGroups([]);
@@ -111,18 +126,20 @@ export default function App() {
     api<Group[]>(manage ? "/api/my/groups" : "/api/groups", {
       signal: controller.signal,
     })
-      .then(setGroups)
+      .then((data) => setGroups(manage ? data : shuffleGroups(data)))
       .catch((e) => {
         if (e.name !== "AbortError") {
           setLoadFailed(true);
           notify.error(e.message);
+          if (manage && e instanceof ApiError && e.status === 401)
+            void sessionExpired();
         }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [manage, user, revision, authLoaded]);
+  }, [manage, adminPage, user, revision, authLoaded]);
   useEffect(() => {
     if (copied === null) return;
     const timer = setTimeout(() => setCopied(null), 2600);
@@ -154,12 +171,39 @@ export default function App() {
     };
   }, [menu]);
   const visible = filterGroups(groups, query);
+  const sessionExpired = async () => {
+    if (user) clearAccountDrafts(user.id);
+    setUser(null);
+    setEditor(null);
+    setDeleting(null);
+    setMenu(false);
+    try {
+      setUser(await api<User | null>("/api/me"));
+    } catch {
+      notify.error("登录状态刷新失败，请重新登录");
+    }
+  };
+  const writePersonal = async (
+    target: string,
+    method: string,
+    body?: unknown,
+  ) => {
+    if (!user) throw new Error("请重新登录");
+    try {
+      await api(target, writeOptions(method, user.csrfToken, body));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401)
+        await sessionExpired();
+      throw error;
+    }
+  };
   const save = async (input: GroupInput) => {
     if (!user) return;
     const group = editor?.group;
-    await api(
+    await writePersonal(
       group ? `/api/groups/${group.id}` : "/api/groups",
-      writeOptions(group ? "PUT" : "POST", user.csrfToken, input),
+      group ? "PUT" : "POST",
+      input,
     );
     clearGroupDraft(user.id, group?.id);
     setEditor(null);
@@ -171,10 +215,7 @@ export default function App() {
   };
   const remove = async () => {
     if (!user || !deleting) return;
-    await api(
-      `/api/groups/${deleting.id}`,
-      writeOptions("DELETE", user.csrfToken),
-    );
+    await writePersonal(`/api/groups/${deleting.id}`, "DELETE");
     clearGroupDraft(user.id, deleting.id);
     setDeleting(null);
     setRevision((v) => v + 1);
@@ -255,6 +296,15 @@ export default function App() {
                       <Settings size={16} />
                       管理奶群
                     </button>
+                    {user.isAdmin && (
+                      <button
+                        role="menuitem"
+                        onClick={() => navigate("/admin")}
+                      >
+                        <ShieldCheck size={16} />
+                        站点管理
+                      </button>
+                    )}
                     <button
                       role="menuitem"
                       disabled={logoutBusy}
@@ -293,150 +343,200 @@ export default function App() {
         </div>
       </header>
       <main className="main">
-        {manage && user && (
-          <AccountBindings
+        {adminPage ? (
+          <Admin
+            key={`${path}:${user?.id ?? "guest"}`}
+            page={
+              path === "/admin/users"
+                ? "users"
+                : path === "/admin/groups"
+                  ? "groups"
+                  : "overview"
+            }
             user={user}
+            authLoaded={authLoaded}
             providers={providers}
-            onRetry={retryProviders}
+            navigate={navigate}
+            onLogin={() => setLoginDialog(true)}
+            onSessionExpired={sessionExpired}
           />
-        )}
-        <section className="page-heading">
-          <div>
-            <h1>
-              {manage ? "管理奶群" : "奶龙群列表, 防止迷路"}
-              <span className="title-dot">.</span>
-            </h1>
-            {!manage && (
-              <p>
-                登录后可上传与管理自己的奶群; 所有信息由用户自行上传,
-                请注意甄别; 帮助支持信息请查看页脚
-              </p>
-            )}
-          </div>
-          {manage && user && (
-            <button
-              className="primary add-button"
-              onClick={() => setEditor({ group: null })}
-            >
-              <Plus size={17} />
-              添加奶群
-            </button>
-          )}
-        </section>
-        {manage && authLoaded && !user ? (
-          <div className="empty">
-            <p>登录后管理奶群</p>
-            <button className="primary" onClick={() => setLoginDialog(true)}>
-              登录
-            </button>
-          </div>
         ) : (
           <>
-            <div className="search-box">
-              <Search size={20} />
-              <input
-                aria-label="搜索奶群"
-                placeholder="搜索学校、群号或关键词"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+            {manage && user && (
+              <AccountBindings
+                user={user}
+                providers={providers}
+                onRetry={retryProviders}
+                onSessionExpired={sessionExpired}
               />
-              {query && (
-                <button
-                  aria-label="清空搜索"
-                  className="icon-button"
-                  onClick={() => setQuery("")}
-                >
-                  <X size={18} />
-                </button>
-              )}
-            </div>
-            <div className="list-caption">
-              <span>{loading ? "加载中" : `${visible.length} 个奶群`}</span>
-            </div>
-            {loadFailed ? (
-              <div className="empty">
-                <button
-                  className="secondary"
-                  onClick={() => setRevision((v) => v + 1)}
-                >
-                  重试
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="skeleton-list" aria-label="加载中">
-                {[1, 2, 3].map((i) => (
-                  <div className="skeleton-row" key={i} />
-                ))}
-              </div>
-            ) : visible.length === 0 ? (
-              <div className="empty">
-                <p>
-                  {query
-                    ? "没有匹配的奶群"
-                    : manage
-                      ? "还没有添加奶群"
-                      : "暂无奶群"}
-                </p>
-                {query && (
-                  <button className="secondary" onClick={() => setQuery("")}>
-                    清空搜索
-                  </button>
+            )}
+            <section className="page-heading">
+              <div>
+                <h1>
+                  {manage ? "管理奶群" : "奶龙群列表, 防止迷路"}
+                  <span className="title-dot">.</span>
+                </h1>
+                {!manage && (
+                  <div className="heading-intro">
+                    <p>登录后可上传与管理自己的奶群</p>
+                    <ul className="heading-notes">
+                      <li className="shuffle-note">
+                        <Shuffle size={14} aria-hidden="true" />
+                        每次加载列表随机排序, 以保证曝光
+                      </li>
+                      <li>所有信息由用户自行上传, 请注意甄别</li>
+                      <li>帮助支持信息请查看页脚</li>
+                    </ul>
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="group-list">
-                {visible.map((group) => (
-                  <article className="group-row" key={group.id}>
-                    <div className="group-identity">
-                      <div className="group-icon" aria-hidden="true">
-                        {group.organization.slice(0, 1)}
-                      </div>
-                      <h2>{group.organization}</h2>
-                    </div>
-                    <div className="group-actions">
-                      <button
-                        className="number-button"
-                        aria-label={`复制群号 ${group.qqNumber}`}
-                        onClick={() => copy(group)}
-                      >
-                        <span>{group.qqNumber}</span>
-                        {copied === group.id ? (
-                          <Check size={15} />
-                        ) : (
-                          <Copy size={15} />
-                        )}
-                      </button>
-                      <a
-                        className="join-button"
-                        href={group.joinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        加群
-                        <ArrowUpRight size={16} />
-                      </a>
-                      {manage && (
-                        <div className="manage-actions">
-                          <button
-                            className="icon-button"
-                            aria-label={`编辑 ${group.organization}`}
-                            onClick={() => setEditor({ group })}
-                          >
-                            <Pencil size={17} />
-                          </button>
-                          <button
-                            className="icon-button delete-button"
-                            aria-label={`删除 ${group.organization}`}
-                            onClick={() => setDeleting(group)}
-                          >
-                            <Trash2 size={17} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                ))}
+              {manage && user && (
+                <button
+                  className="primary add-button"
+                  onClick={() => setEditor({ group: null })}
+                >
+                  <Plus size={17} />
+                  添加奶群
+                </button>
+              )}
+            </section>
+            {manage && authLoaded && !user ? (
+              <div className="empty">
+                <p>登录后管理奶群</p>
+                <button
+                  className="primary"
+                  onClick={() => setLoginDialog(true)}
+                >
+                  登录
+                </button>
               </div>
+            ) : (
+              <>
+                <div className="search-toolbar">
+                  <div className="search-box">
+                    <Search size={20} />
+                    <input
+                      aria-label="搜索奶群"
+                      placeholder="搜索学校、群号或关键词"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                    {query && (
+                      <button
+                        aria-label="清空搜索"
+                        className="icon-button"
+                        onClick={() => setQuery("")}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="secondary refresh-button"
+                    aria-label="刷新列表"
+                    title="刷新列表"
+                    disabled={loading}
+                    onClick={() => setRevision((v) => v + 1)}
+                  >
+                    <RefreshCw
+                      size={20}
+                      className={loading ? "refresh-spinning" : undefined}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+                <div className="list-caption">
+                  <span>{loading ? "加载中" : `${visible.length} 个奶群`}</span>
+                </div>
+                {loadFailed ? (
+                  <div className="empty">
+                    <button
+                      className="secondary"
+                      onClick={() => setRevision((v) => v + 1)}
+                    >
+                      重试
+                    </button>
+                  </div>
+                ) : loading ? (
+                  <div className="skeleton-list" aria-label="加载中">
+                    {[1, 2, 3].map((i) => (
+                      <div className="skeleton-row" key={i} />
+                    ))}
+                  </div>
+                ) : visible.length === 0 ? (
+                  <div className="empty">
+                    <p>
+                      {query
+                        ? "没有匹配的奶群"
+                        : manage
+                          ? "还没有添加奶群"
+                          : "暂无奶群"}
+                    </p>
+                    {query && (
+                      <button
+                        className="secondary"
+                        onClick={() => setQuery("")}
+                      >
+                        清空搜索
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="group-list">
+                    {visible.map((group) => (
+                      <article className="group-row" key={group.id}>
+                        <div className="group-identity">
+                          <div className="group-icon" aria-hidden="true">
+                            {group.organization.slice(0, 1)}
+                          </div>
+                          <h2>{group.organization}</h2>
+                        </div>
+                        <div className="group-actions">
+                          <button
+                            className="number-button"
+                            aria-label={`复制群号 ${group.qqNumber}`}
+                            onClick={() => copy(group)}
+                          >
+                            <span>{group.qqNumber}</span>
+                            {copied === group.id ? (
+                              <Check size={15} />
+                            ) : (
+                              <Copy size={15} />
+                            )}
+                          </button>
+                          <a
+                            className="join-button"
+                            href={group.joinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            加群
+                            <ArrowUpRight size={16} />
+                          </a>
+                          {manage && (
+                            <div className="manage-actions">
+                              <button
+                                className="icon-button"
+                                aria-label={`编辑 ${group.organization}`}
+                                onClick={() => setEditor({ group })}
+                              >
+                                <Pencil size={17} />
+                              </button>
+                              <button
+                                className="icon-button delete-button"
+                                aria-label={`删除 ${group.organization}`}
+                                onClick={() => setDeleting(group)}
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

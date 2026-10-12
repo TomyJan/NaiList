@@ -1,0 +1,382 @@
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.admin-nav a {
+  padding: 10px 20px;
+  border-radius: 999px;
+  color: #436049;
+  background: #eef4ed;
+}
+.admin-nav a.active {
+  background: #174a35;
+  color: #fff;
+}
+.admin-user {
+  align-items: flex-start;
+}
+.admin-user-summary {
+  flex: 1;
+  min-width: 0;
+}
+.admin-user-summary p,
+.admin-group-info p {
+  color: #70806f;
+  font-size: 13px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+.admin-user-summary > button {
+  margin-top: 14px;
+}
+.admin-identities {
+  display: grid;
+  gap: 16px;
+  flex: 1.5;
+  min-width: 0;
+  width: 100%;
+}
+.admin-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.admin-identity strong {
+  overflow-wrap: anywhere;
+}
+.admin-identity-action {
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+  max-width: 145px;
+}
+.admin-identity-action button {
+  white-space: nowrap;
+}
+.admin-reason {
+  color: #788675;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.admin-group-info {
+  min-width: 0;
+  flex: 1;
+}
+.admin-full-link {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #477835;
+  font-size: 13px;
+  margin-top: 8px;
+  line-height: 1.65;
+}
+.admin-group > button {
+  flex-shrink: 0;
+}
+.owner-picker {
+  border: 1px solid #dce5d9;
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+  margin: 0;
+}
+.owner-picker legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 5px;
+}
+.owner-selected {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  color: #58705f;
+}
+.owner-options {
+  display: grid;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.owner-option {
+  padding: 10px;
+  text-align: left;
+  border-radius: 7px;
+  color: #436049;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+.owner-option:hover,
+.owner-option.selected {
+  background: #eef4ed;
+}
+.owner-options > p {
+  color: #788675;
+  font-size: 12px;
+  padding: 10px;
+}
+.admin-user button:disabled,
+.owner-picker:disabled {
+  opacity: 0.6;
+}
+@media (max-width: 700px) {
+  .admin-identity {
+    flex-wrap: wrap;
+  }
+  .admin-user-summary {
+    width: 100%;
+  }
+  .admin-identities {
+    border-top: 1px solid #e0e9e0;
+    padding-top: 14px;
+  }
+  .admin-identity-action {
+    margin-left: auto;
+  }
+  .admin-group > button {
+    align-self: flex-end;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .admin-nav a,
+  .owner-option:hover,
+  .owner-option.selected {
+    background: #2b3b30;
+    color: #d0e3d1;
+  }
+  .admin-nav a.active {
+    background: #a7d78f;
+    color: #14261a;
+  }
+  .admin-user-summary p,
+  .admin-group-info p,
+  .admin-reason,
+  .owner-selected,
+  .owner-options > p {
+    color: #a5b7ab;
+  }
+  .admin-full-link {
+    color: #c4e3a8;
+  }
+  .owner-picker,
+  .admin-identities {
+    border-color: #41594a;
+  }
+  .owner-option {
+    color: #d0e3d1;
+  }
+}
+
+.overview-toolbar,
+.trend-heading,
+.stat-label,
+.trend-card figcaption,
+.trend-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.overview-toolbar {
+  margin: -8px 0 22px;
+}
+.overview-toolbar > p,
+.stat-card p,
+.stats-method,
+.trend-card figcaption > span,
+.trend-detail {
+  color: #70806f;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.stat-card,
+.trend-card {
+  background: #fff;
+  border: 1px solid #dfe9de;
+  border-radius: 16px;
+  padding: 22px;
+  min-width: 0;
+  margin: 0;
+}
+.stat-label {
+  color: #58705f;
+  font-size: 13px;
+}
+.stat-label svg {
+  color: #87a77b;
+  flex-shrink: 0;
+}
+.stat-value {
+  display: block;
+  margin: 15px 0 6px;
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 750;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.trend-heading {
+  margin: 30px 0 16px;
+}
+.trend-heading h2 {
+  font-size: 18px;
+}
+.trend-range {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #eaf1e8;
+}
+.trend-range button {
+  border-radius: 7px;
+  padding: 7px 13px;
+  color: #58705f;
+  background: transparent;
+  font-size: 12px;
+}
+.trend-range button[aria-pressed="true"] {
+  background: #fff;
+  color: #174a35;
+  box-shadow: 0 1px 5px #174a3510;
+}
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.trend-card figcaption {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 18px;
+}
+.trend-card h3 {
+  font-size: 15px;
+}
+.trend-card > svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.trend-gridline {
+  stroke: #e8eee6;
+  stroke-dasharray: 3 4;
+}
+.trend-axis {
+  fill: #788675;
+  font-size: 11px;
+}
+.trend-bar {
+  fill: #83ad8d;
+  pointer-events: none;
+}
+.trend-groups .trend-bar {
+  fill: #aec77d;
+}
+.trend-bar.selected {
+  fill: #245c40;
+}
+.trend-groups .trend-bar.selected {
+  fill: #6e8e38;
+}
+.trend-hit {
+  fill: transparent;
+}
+.trend-day:focus {
+  outline: none;
+}
+.trend-day:focus-visible .trend-hit {
+  stroke: #436049;
+  stroke-width: 2px;
+}
+.trend-day:hover .trend-hit {
+  fill: #174a3506;
+}
+.trend-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e8eee6;
+  font-variant-numeric: tabular-nums;
+}
+.trend-detail strong {
+  color: #436049;
+}
+.stats-method {
+  margin-top: 16px;
+}
+@media (max-width: 700px) {
+  .admin-nav a {
+    padding: 10px 13px;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat-card {
+    padding: 16px;
+  }
+  .trend-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .trend-card {
+    padding: 18px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .stat-card,
+  .trend-card {
+    background: #1c2a21;
+    border-color: #354b3c;
+  }
+  .overview-toolbar > p,
+  .stat-card p,
+  .stats-method,
+  .trend-card figcaption > span,
+  .trend-detail,
+  .stat-label {
+    color: #a5b7ab;
+  }
+  .trend-range {
+    background: #26382c;
+  }
+  .trend-range button {
+    color: #b6c9b9;
+  }
+  .trend-range button[aria-pressed="true"] {
+    background: #405b3a;
+    color: #e1f1d6;
+  }
+  .trend-gridline {
+    stroke: #354b3c;
+  }
+  .trend-axis {
+    fill: #a5b7ab;
+  }
+  .trend-bar.selected {
+    fill: #b0d7b6;
+  }
+  .trend-groups .trend-bar.selected {
+    fill: #d4e6a8;
+  }
+  .trend-day:focus-visible .trend-hit {
+    stroke: #c4e3a8;
+  }
+  .trend-day:hover .trend-hit {
+    fill: #b0d7b610;
+  }
+  .trend-detail {
+    border-color: #354b3c;
+  }
+  .trend-detail strong {
+    color: #c4e3a8;
+  }
+}

@@ -12,6 +12,17 @@ export interface User {
   avatarUrl: string;
   csrfToken: string;
   identities: LoginIdentity[];
+  isAdmin?: boolean;
+}
+export interface AdminUser {
+  id: number;
+  nickname: string;
+  avatarUrl: string;
+  groupCount: number;
+  identities: LoginIdentity[];
+}
+export interface AdminGroup extends Group {
+  ownerId: number;
 }
 export interface LoginIdentity {
   providerId: string;
@@ -29,4 +40,12 @@ export interface GroupInput {
   keywords: string;
   qqNumber: string;
   joinUrl: string;
+}
+
+export interface AdminStats {
+  users: number;
+  groups: number;
+  contributors: number;
+  organizations: number;
+  daily: { date: string; users: number; groups: number }[];
 }

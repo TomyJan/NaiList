@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"io"
+	"log/slog"
 	"nailist/internal/groups"
+	"nailist/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,6 +24,7 @@ type Config struct {
 	Version, UmamiScriptURL, UmamiWebsiteID string
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig
+	AdminUserIDs                            map[int64]bool
 }
 type User struct {
 	ID        int64  `json:"id"`
@@ -53,15 +56,28 @@ func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
 	r.Use(logRequest)
 	r.Use(recoverRequest)
-	r.Use(middleware.Timeout(20 * time.Second))
+	r.Use(requestTimeout(20 * time.Second))
 	r.Use(s.headers)
 	r.Use(s.session)
 	r.Get("/api/groups", s.list)
 	r.Get("/api/me", s.me)
 	r.Get("/api/auth/providers", s.authProviders)
+	r.Route("/api/admin", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Use(s.requireAdmin)
+		r.Get("/stats", s.adminStats)
+		r.Get("/users", s.adminUsers)
+		r.Get("/groups", s.adminGroups)
+		r.Group(func(r chi.Router) {
+			r.Use(s.protectWrite)
+			r.Use(middleware.Throttle(32))
+			r.Delete("/users/{id}/identities/{provider}", s.adminUnbind)
+			r.Delete("/users/{id}", s.adminDeleteUser)
+			r.Put("/groups/{id}", s.adminSaveGroup)
+		})
+	})
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)
@@ -85,15 +101,28 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		if s.db != nil {
 			if err := s.db.Ping(r.Context()); err != nil {
-				requestLogger(r).ErrorContext(r.Context(), "健康检查失败", "error", err)
+				level, outcome, reason := slog.LevelError, "failed", "database_unavailable"
+				switch logging.ErrorKind(err) {
+				case "canceled":
+					level, outcome, reason = slog.LevelInfo, "canceled", "client_canceled"
+				case "timeout":
+					level, outcome, reason = slog.LevelWarn, "timeout", "deadline_exceeded"
+				default:
+					requestErrorLogged(r)
+				}
+				requestResult(r, outcome, reason)
+				requestLogger(r).Log(r.Context(), level, "健康检查未完成，请查看数据库错误及请求状态", append([]any{"component", "health", "event", "health.check.failed", "reason", reason, "outcome", outcome}, logging.ErrorAttrs(err)...)...)
 				respond(w, r, 503, map[string]string{"error": "数据库不可用"})
 				return
 			}
 		}
+		requestLogger(r).DebugContext(r.Context(), "健康检查通过：HTTP 与数据库可用", "component", "health", "event", "health.check.completed", "database_checked", s.db != nil)
 		respond(w, r, 200, map[string]string{"status": "ok"})
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
+			requestResult(r, "rejected", "route_not_found")
+			requestLogger(r).DebugContext(r.Context(), "未找到对应 API 路由", "component", "http", "event", "http.route.unmatched", "reason", "route_not_found")
 			respond(w, r, 404, map[string]string{"error": "接口不存在"})
 			return
 		}
@@ -105,39 +134,75 @@ func respond(w http.ResponseWriter, r *http.Request, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		requestLogger(r).WarnContext(r.Context(), "写入响应失败", "error", err)
+		responseFailure(r, status, err)
 	}
 }
 func failure(w http.ResponseWriter, r *http.Request, err error) {
+	operation, _ := requestOperation(r)
+	failOperation(w, r, err, operation+".failed", "store_failed")
+}
+func failOperation(w http.ResponseWriter, r *http.Request, err error, event, reason string, args ...any) {
 	status := 500
 	msg := "服务暂不可用"
+	level := slog.LevelError
+	outcome := "failed"
 	switch {
 	case errors.Is(err, groups.ErrNotFound):
 		status = 404
 		msg = err.Error()
+		level = slog.LevelDebug
+		outcome = "rejected"
+		reason = "not_found_or_not_owned"
 	case errors.Is(err, groups.ErrDuplicate):
 		status = 409
 		msg = err.Error()
-	default:
-		requestLogger(r).ErrorContext(r.Context(), "请求处理失败", "error", err)
+		level = slog.LevelWarn
+		outcome = "rejected"
+		reason = "duplicate_qq_number"
+	case errors.Is(err, context.Canceled):
+		level = slog.LevelInfo
+		reason = "client_canceled"
+		outcome = "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		status = 504
+		level = slog.LevelWarn
+		reason = "deadline_exceeded"
+		outcome = "timeout"
 	}
+	requestResult(r, outcome, reason)
+	if level == slog.LevelError {
+		requestErrorLogged(r)
+	}
+	operation, description := requestOperation(r)
+	component := strings.SplitN(operation, ".", 2)[0]
+	attrs := append([]any{"component", component, "event", event, "reason", reason, "outcome", outcome}, args...)
+	attrs = append(attrs, logging.ErrorAttrs(err)...)
+	requestLogger(r).Log(r.Context(), level, description+"未完成，请检查失败原因", attrs...)
 	respond(w, r, status, map[string]string{"error": msg})
 }
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "查询所有用户上传的有效奶群，不分页", "component", "groups", "event", "groups.list.started", "scope", "public")
 	g, err := s.store.List(r.Context(), 0)
 	if err != nil {
 		failure(w, r, err)
 		return
 	}
+	requestDetails(r, "count", len(g), "scope", "public")
+	requestLogger(r).DebugContext(r.Context(), "已读取公开奶群列表", "component", "groups", "event", "groups.list.completed", "scope", "public", "count", len(g), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, g)
 }
 func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value(userKey).(User)
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "按当前账号查询本人有效奶群", "component", "groups", "event", "groups.list.started", "scope", "owner")
 	g, err := s.store.List(r.Context(), u.ID)
 	if err != nil {
 		failure(w, r, err)
 		return
 	}
+	requestDetails(r, "count", len(g), "scope", "owner")
+	requestLogger(r).DebugContext(r.Context(), "已读取本人奶群列表", "component", "groups", "event", "groups.list.completed", "scope", "owner", "count", len(g), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, g)
 }
 func groupID(r *http.Request) (int64, error) { return strconv.ParseInt(chi.URLParam(r, "id"), 10, 64) }
@@ -147,7 +212,7 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 		var err error
 		id, err = groupID(r)
 		if err != nil || id < 1 {
-			respond(w, r, 400, map[string]string{"error": "无效群 ID"})
+			rejectRequest(w, r, 400, "groups.save.rejected", "invalid_group_id", "无效群 ID")
 			return
 		}
 	}
@@ -156,22 +221,24 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&in); err != nil {
-		respond(w, r, 400, map[string]string{"error": "表单格式错误"})
+		rejectRequest(w, r, 400, "groups.save.rejected", "invalid_json", "表单格式错误", "body_limit_bytes", 16384)
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		respond(w, r, 400, map[string]string{"error": "表单格式错误"})
+		rejectRequest(w, r, 400, "groups.save.rejected", "trailing_json", "表单格式错误")
 		return
 	}
 	g, err := groups.Normalize(in)
 	if err != nil {
-		respond(w, r, 400, map[string]string{"error": err.Error()})
+		rejectRequest(w, r, 400, "groups.save.rejected", "validation_failed", err.Error(), "group_id", id)
 		return
 	}
 	u := r.Context().Value(userKey).(User)
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "奶群表单已通过校验，开始持久化", "component", "groups", "event", "groups.save.started", "group_id", id, "organization", g.Organization, "qq_number", g.QQNumber, "keyword_count", len(g.Keywords), "link_format", joinLinkFormat(g.JoinURL))
 	g, err = s.store.Save(r.Context(), u.ID, id, g)
 	if err != nil {
-		failure(w, r, err)
+		failOperation(w, r, err, "groups.save.failed", "store_failed", "group_id", id, "qq_number", in.QQNumber)
 		return
 	}
 	status := 200
@@ -182,27 +249,31 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	if id == 0 {
 		action = "创建奶群"
 	}
-	requestLogger(r).InfoContext(r.Context(), action, "group_id", g.ID)
+	requestDetails(r, "group_id", g.ID)
+	requestLogger(r).InfoContext(r.Context(), action+"成功，数据库已保存", "component", "groups", "event", "groups.save.completed", "outcome", "success", "group_id", g.ID, "organization", g.Organization, "qq_number", g.QQNumber, "keyword_count", len(g.Keywords), "link_format", joinLinkFormat(g.JoinURL), "duration_ms", logging.DurationMS(started))
 	respond(w, r, status, g)
 }
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 	id, err := groupID(r)
 	if err != nil || id < 1 {
-		respond(w, r, 400, map[string]string{"error": "无效群 ID"})
+		rejectRequest(w, r, 400, "groups.delete.rejected", "invalid_group_id", "无效群 ID")
 		return
 	}
 	u := r.Context().Value(userKey).(User)
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "按群 ID 和所属账号执行软删除", "component", "groups", "event", "groups.delete.started", "group_id", id)
 	if err := s.store.Delete(r.Context(), u.ID, id); err != nil {
-		failure(w, r, err)
+		failOperation(w, r, err, "groups.delete.failed", "store_failed", "group_id", id)
 		return
 	}
-	requestLogger(r).InfoContext(r.Context(), "删除奶群", "group_id", id)
+	requestDetails(r, "group_id", id)
+	requestLogger(r).InfoContext(r.Context(), "奶群已软删除，将不再出现在公开列表", "component", "groups", "event", "groups.delete.completed", "outcome", "success", "group_id", id, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
 }
 func (s *Server) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Context().Value(userKey).(User); !ok {
-			respond(w, r, 401, map[string]string{"error": "请先登录"})
+			rejectRequest(w, r, 401, "auth.access.rejected", "authentication_required", "请先登录")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -213,12 +284,29 @@ func (s *Server) protectWrite(next http.Handler) http.Handler {
 		u := r.Context().Value(userKey).(User)
 		origin := r.Header.Get("Origin")
 		expected, _ := url.Parse(s.cfg.PublicURL)
-		if (origin != "" && origin != expected.Scheme+"://"+expected.Host) || r.Header.Get("Sec-Fetch-Site") == "cross-site" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(u.CSRF)) != 1 {
-			respond(w, r, 403, map[string]string{"error": "登录校验失败，请刷新"})
+		reason := ""
+		switch {
+		case origin != "" && origin != expected.Scheme+"://"+expected.Host:
+			reason = "origin_mismatch"
+		case r.Header.Get("Sec-Fetch-Site") == "cross-site":
+			reason = "cross_site_request"
+		case subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(u.CSRF)) != 1:
+			reason = "csrf_mismatch"
+		}
+		if reason != "" {
+			rejectRequest(w, r, 403, "auth.write.rejected", reason, "登录校验失败，请刷新", "csrf_present", r.Header.Get("X-CSRF-Token") != "")
 			return
 		}
+		requestLogger(r).DebugContext(r.Context(), "写入请求已通过来源和 CSRF 检查", "component", "auth", "event", "auth.write.verified")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func joinLinkFormat(link string) string {
+	if strings.HasPrefix(link, "https://qun.qq.com/") {
+		return "legacy_share"
+	}
+	return "short"
 }
 func (s *Server) headers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

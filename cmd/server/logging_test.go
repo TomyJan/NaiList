@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -96,6 +97,54 @@ func TestStartupFailuresAreLogged(t *testing.T) {
 		}
 		listener.Close()
 	})
+}
+
+func TestStartupFailureHasSemanticContext(t *testing.T) {
+	out := startupTest(t)
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	t.Setenv("PORT", fmt.Sprint(listener.Addr().(*net.TCPAddr).Port))
+	if err := run(t.Context(), out); err == nil {
+		t.Fatal("port conflict accepted")
+	}
+	for _, want := range []string{"service=nailist", "event=app.starting", "event=app.startup.failed", "stage=http_bind", "listen_address=", "hint=", "error_kind=network", "pid=", "version="} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s: %s", want, out.String())
+		}
+	}
+}
+
+func TestEnvironmentReadFailureRetainsSafeCause(t *testing.T) {
+	out := startupTest(t)
+	if err := os.Mkdir(".env", 0700); err != nil {
+		t.Fatal(err)
+	}
+	err := run(t.Context(), out)
+	var path *os.PathError
+	if !errors.As(err, &path) || !strings.Contains(out.String(), "operation=") || !strings.Contains(out.String(), "stage=environment") {
+		t.Fatalf("environment IO cause lost: %v %s", err, out.String())
+	}
+}
+
+func TestStartupCanceledIsNotError(t *testing.T) {
+	out := startupTest(t)
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PORT", fmt.Sprint(listener.Addr().(*net.TCPAddr).Port))
+	listener.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := run(ctx, out); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected startup cancellation: %v", err)
+	}
+	if strings.Contains(out.String(), "level=ERROR") || !strings.Contains(out.String(), "event=app.startup.canceled") || !strings.Contains(out.String(), "outcome=canceled") {
+		t.Fatalf("canceled startup misreported: %s", out.String())
+	}
 }
 
 func TestShutdownWaitsForActiveRequests(t *testing.T) {
