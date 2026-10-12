@@ -1,6 +1,11 @@
 import type { Group, GroupInput } from "./types";
 
-export const joinLinkPattern = /^https:\/\/qm\.qq\.com\/q\/[A-Za-z0-9_-]+$/;
+const joinLinkSource = String.raw`https://(?:qm\.qq\.com/q/[A-Za-z0-9_-]+|qun\.qq\.com/universal-share/share\?(?:[A-Za-z0-9._~!$&*+,;=:@/?-]|%[A-Fa-f0-9]{2})+)`;
+export const joinLinkPattern = new RegExp(`^${joinLinkSource}$`);
+const shareLinkPattern = new RegExp(
+  String.raw`${joinLinkSource}(?=$|[\s，。；！、）)\]}>])`,
+  "u",
+);
 
 export function initialGroupInput(group: Group | null): GroupInput {
   return {
@@ -12,11 +17,7 @@ export function initialGroupInput(group: Group | null): GroupInput {
 }
 
 export function extractJoinLink(text: string): string | null {
-  return (
-    text.match(
-      /https:\/\/qm\.qq\.com\/q\/[A-Za-z0-9_-]+(?=$|[\s，。；！、）)\]}>])/u,
-    )?.[0] ?? null
-  );
+  return text.match(shareLinkPattern)?.[0] ?? null;
 }
 
 export function validateGroupInput(input: GroupInput): string {
@@ -27,7 +28,7 @@ export function validateGroupInput(input: GroupInput): string {
     return "群号须为 5～11 位数字";
   const link = input.joinUrl.trim();
   if (!joinLinkPattern.test(link) || link.length > 2048)
-    return "群链接须为 https://qm.qq.com/q/ 开头的有效 QQ 群链接";
+    return "请输入有效 QQ 群链接（支持新版短链接与旧版分享链接）";
   if ([...input.keywords].length > 128) return "关键词最多 128 字";
   return "";
 }

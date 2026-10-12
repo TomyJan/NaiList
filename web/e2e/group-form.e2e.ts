@@ -227,6 +227,58 @@ test("粘贴分享文本、浏览器解析二维码及失败保留链接", async
   });
 });
 
+test("旧版分享链接粘贴、二维码、添加与编辑完整保留参数", async ({ page }) => {
+  const state = await mockEditor(page);
+  const legacyLink =
+    "https://qun.qq.com/universal-share/share?ac=1&authKey=legacy%2Fkey%2Bvalue&busi_data=eyJncm91cENvZGUiOiIyMTE3NDI4OTAiLCJ0b2tlbiI6InRlc3QifQ%3D%3D&data=TgCZzEa_6tMq-LgbmYKFa-KinLM54Q&svctype=4&tempid=h5_group_info";
+  await page.getByRole("button", { name: "添加奶群" }).click();
+  await page.getByLabel("学校 / 单位").fill("深圳技术大学");
+  await page.getByLabel("群号", { exact: true }).fill("211742890");
+  const link = page.getByLabel("群链接");
+  await link.evaluate((element, url) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData(
+      "text/plain",
+      `点击链接加入群聊【SZTU奶龙联邦】：${url}\u00a0`,
+    );
+    element.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }, legacyLink);
+  await expect(link).toHaveValue(legacyLink);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(state.writes[0]).toMatchObject({ joinUrl: legacyLink });
+
+  await page.getByRole("button", { name: "编辑 深圳技术大学" }).click();
+  await expect(link).toHaveValue(legacyLink);
+  await link.fill("https://qm.qq.com/q/previous");
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles(
+      fileURLToPath(new URL("./fixtures/legacy-group-qr.png", import.meta.url)),
+    );
+  await expect(link).toHaveValue(legacyLink);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(state.writes[1]).toMatchObject({ joinUrl: legacyLink });
+
+  await page
+    .locator("header")
+    .getByRole("link", { name: "首页", exact: true })
+    .click();
+  await expect(
+    page
+      .locator("article")
+      .filter({ hasText: "深圳技术大学" })
+      .getByRole("link", { name: "加群" }),
+  ).toHaveAttribute("href", legacyLink);
+});
+
 test("前端校验拦截非法输入，不发写入请求", async ({ page }) => {
   const state = await mockEditor(page);
   await page.getByRole("button", { name: "添加奶群" }).click();

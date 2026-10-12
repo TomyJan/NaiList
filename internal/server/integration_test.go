@@ -111,6 +111,29 @@ func TestPostgresCRUDSessionsAndOwnership(t *testing.T) {
 	if w = request("PUT", path, strings.Replace(body, "烂梨", "新简称", 1), token); w.Code != 200 {
 		t.Fatalf("edit %d", w.Code)
 	}
+	legacyLink := "https://qun.qq.com/universal-share/share?ac=1&authKey=legacy%2Fkey%2Bvalue&busi_data=test%3D&data=token&svctype=4&tempid=h5_group_info"
+	legacyBody := strings.Replace(body, "https://qm.qq.com/q/test", legacyLink, 1)
+	if w = request("PUT", path, legacyBody, token); w.Code != 200 {
+		t.Fatalf("legacy edit %d %s", w.Code, w.Body.String())
+	}
+	var storedLink string
+	if err := db.QueryRow(ctx, `SELECT join_url FROM groups WHERE id=$1`, g.ID).Scan(&storedLink); err != nil || storedLink != legacyLink {
+		t.Fatalf("legacy link not preserved in database: %q, %v", storedLink, err)
+	}
+	w = request("GET", "/api/groups", "", "")
+	var listed []groups.Group
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &listed) != nil {
+		t.Fatalf("legacy list %d %s", w.Code, w.Body.String())
+	}
+	found := false
+	for _, listedGroup := range listed {
+		if listedGroup.ID == g.ID {
+			found = listedGroup.JoinURL == legacyLink
+		}
+	}
+	if !found {
+		t.Fatal("legacy link not preserved in public list")
+	}
 	if w = request("DELETE", path, "", token); w.Code != 204 {
 		t.Fatalf("delete %d", w.Code)
 	}

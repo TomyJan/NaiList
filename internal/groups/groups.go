@@ -25,7 +25,7 @@ type Input struct {
 }
 
 var numberPattern = regexp.MustCompile(`^[0-9]{5,11}$`)
-var joinPattern = regexp.MustCompile(`^https://qm\.qq\.com/q/[A-Za-z0-9_-]+$`)
+var joinPattern = regexp.MustCompile(`^https://(?:qm\.qq\.com/q/[A-Za-z0-9_-]+|qun\.qq\.com/universal-share/share\?(?:[A-Za-z0-9._~!$&*+,;=:@/?-]|%[A-Fa-f0-9]{2})+)$`)
 var ErrNotFound = errors.New("群不存在或无权操作")
 var ErrDuplicate = errors.New("此群号已存在, 请前往首页搜索查看")
 
@@ -38,7 +38,7 @@ func Normalize(in Input) (Group, error) {
 		return g, errors.New("群号须为 5～11 位数字")
 	}
 	if !joinPattern.MatchString(g.JoinURL) || len(g.JoinURL) > 2048 {
-		return g, errors.New("群链接须为 https://qm.qq.com/q/ 开头的有效 QQ 群链接")
+		return g, errors.New("请输入有效 QQ 群链接（支持新版短链接与旧版分享链接）")
 	}
 	if utf8.RuneCountInString(in.Keywords) > 128 {
 		return g, errors.New("关键词最多 128 字")

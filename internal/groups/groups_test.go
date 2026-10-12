@@ -7,6 +7,7 @@ import (
 
 func TestGroupInputLimits(t *testing.T) {
 	valid := Input{Organization: "兰州理工大学", QQNumber: "12345", JoinURL: "https://qm.qq.com/q/AjLVv044nu"}
+	legacyLink := "https://qun.qq.com/universal-share/share?ac=1&authKey=legacy%2Fkey%2Bvalue&busi_data=eyJncm91cENvZGUiOiIyMTE3NDI4OTAiLCJ0b2tlbiI6InRlc3QifQ%3D%3D&data=TgCZzEa_6tMq-LgbmYKFa-KinLM54Q&svctype=4&tempid=h5_group_info"
 	for _, test := range []struct {
 		name, field, value string
 		valid              bool
@@ -20,6 +21,20 @@ func TestGroupInputLimits(t *testing.T) {
 		{"keywords boundary", "keywords", strings.Repeat("🍐", 128), true},
 		{"keywords overflow", "keywords", strings.Repeat("梨", 129), false},
 		{"short link", "link", valid.JoinURL, true},
+		{"legacy share", "link", legacyLink, true},
+		{"trimmed legacy share", "link", " " + legacyLink + "\u00a0", true},
+		{"legacy query encoding", "link", "https://qun.qq.com/universal-share/share?data=test%2fkey+value&ac=1", true},
+		{"legacy http", "link", "http://qun.qq.com/universal-share/share?ac=1", false},
+		{"legacy host suffix", "link", "https://qun.qq.com.evil/universal-share/share?ac=1", false},
+		{"legacy credentials", "link", "https://user@qun.qq.com/universal-share/share?ac=1", false},
+		{"legacy port", "link", "https://qun.qq.com:443/universal-share/share?ac=1", false},
+		{"legacy missing query", "link", "https://qun.qq.com/universal-share/share", false},
+		{"legacy empty query", "link", "https://qun.qq.com/universal-share/share?", false},
+		{"legacy other path", "link", "https://qun.qq.com/other?ac=1", false},
+		{"legacy fragment", "link", legacyLink + "#fragment", false},
+		{"legacy invalid escape", "link", legacyLink + "&key=%ZZ", false},
+		{"legacy whitespace", "link", legacyLink + "&key=a b", false},
+		{"legacy overflow", "link", legacyLink + "&key=" + strings.Repeat("a", 2048), false},
 		{"trimmed link", "link", " " + valid.JoinURL + "\u00a0", true},
 		{"http link", "link", "http://qm.qq.com/q/abc", false},
 		{"other domain", "link", "https://example.com/q/abc", false},
@@ -42,9 +57,12 @@ func TestGroupInputLimits(t *testing.T) {
 			case "link":
 				input.JoinURL = test.value
 			}
-			_, err := Normalize(input)
+			group, err := Normalize(input)
 			if (err == nil) != test.valid {
 				t.Fatalf("valid=%v, error=%v", test.valid, err)
+			}
+			if err == nil && group.JoinURL != strings.TrimSpace(input.JoinURL) {
+				t.Fatal("link query was changed")
 			}
 		})
 	}

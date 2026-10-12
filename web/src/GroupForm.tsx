@@ -167,7 +167,7 @@ export function GroupForm({
                 const text = e.clipboardData.getData("text");
                 field("joinUrl", extractJoinLink(text) ?? text.trim());
               }}
-              placeholder="https://qm.qq.com/q/…"
+              placeholder="粘贴 QQ 群链接或分享文本"
             />
             <button
               type="button"

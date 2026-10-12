@@ -9,6 +9,9 @@ const valid: GroupInput = {
   joinUrl: "https://qm.qq.com/q/AjLVv044nu",
 };
 
+const legacyLink =
+  "https://qun.qq.com/universal-share/share?ac=1&authKey=legacy%2Fkey%2Bvalue&busi_data=eyJncm91cENvZGUiOiIyMTE3NDI4OTAiLCJ0b2tlbiI6InRlc3QifQ%3D%3D&data=TgCZzEa_6tMq-LgbmYKFa-KinLM54Q&svctype=4&tempid=h5_group_info";
+
 describe("与后端一致的字段校验", () => {
   it.each([
     ["qqNumber", "00000", true],
@@ -20,6 +23,24 @@ describe("与后端一致的字段校验", () => {
     ["keywords", "🍐".repeat(128), true],
     ["keywords", "梨".repeat(129), false],
     ["joinUrl", valid.joinUrl, true],
+    ["joinUrl", legacyLink, true],
+    ["joinUrl", ` ${legacyLink}\u00a0`, true],
+    [
+      "joinUrl",
+      "https://qun.qq.com/universal-share/share?data=test%2fkey+value&ac=1",
+      true,
+    ],
+    ["joinUrl", "http://qun.qq.com/universal-share/share?ac=1", false],
+    ["joinUrl", "https://qun.qq.com.evil/universal-share/share?ac=1", false],
+    ["joinUrl", "https://user@qun.qq.com/universal-share/share?ac=1", false],
+    ["joinUrl", "https://qun.qq.com:443/universal-share/share?ac=1", false],
+    ["joinUrl", "https://qun.qq.com/universal-share/share", false],
+    ["joinUrl", "https://qun.qq.com/universal-share/share?", false],
+    ["joinUrl", "https://qun.qq.com/other?ac=1", false],
+    ["joinUrl", `${legacyLink}#fragment`, false],
+    ["joinUrl", `${legacyLink}&key=%ZZ`, false],
+    ["joinUrl", `${legacyLink}&key=a b`, false],
+    ["joinUrl", `${legacyLink}&key=${"a".repeat(2048)}`, false],
     ["joinUrl", ` ${valid.joinUrl}\u00a0`, true],
     ["joinUrl", "http://qm.qq.com/q/abc", false],
     ["joinUrl", "https://example.com/q/abc", false],
@@ -43,6 +64,14 @@ describe("QQ 分享文本提取", () => {
       valid.joinUrl,
     ],
     [valid.joinUrl, valid.joinUrl],
+    [`点击链接加入群聊【SZTU奶龙联邦】：${legacyLink}\u00a0`, legacyLink],
+    [legacyLink, legacyLink],
+    [`${legacyLink}。`, legacyLink],
+    [`（${legacyLink}）`, legacyLink],
+    [`${legacyLink}#fragment`, null],
+    [`${legacyLink}&key=%ZZ`, null],
+    ["https://qun.qq.com.evil/universal-share/share?ac=1", null],
+    ["https://qun.qq.com/universal-share/share", null],
     [`${valid.joinUrl}。`, valid.joinUrl],
     ["https://qm.qq.com/q/abc/extra", null],
     ["https://example.com/q/abc", null],
