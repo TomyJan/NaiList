@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+.env
+.superpowers/
+*.exe
+playwright-report/
+test-results/
