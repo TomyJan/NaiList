@@ -27,7 +27,7 @@ func TestStartupWebInjection(t *testing.T) {
 		}
 		first = body
 		csp := out.Header().Get("Content-Security-Policy")
-		for _, directive := range []string{"script-src 'self' https://stats.example.com", "connect-src 'self' https://stats.example.com", "style-src 'self' https://cdn.amoe.cc", "font-src 'self' https://cdn-file.hyperos.mi.com"} {
+		for _, directive := range []string{"script-src 'self' https://stats.example.com", "connect-src 'self' https://stats.example.com", "style-src 'self' https://cdn.amoe.cc", "font-src 'self' https://cdn-file.hyperos.mi.com", "img-src 'self' https: data: blob:"} {
 			if !strings.Contains(csp, directive) {
 				t.Fatalf("missing CSP directive %s: %s", directive, csp)
 			}

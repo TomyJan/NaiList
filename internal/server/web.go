@@ -37,7 +37,7 @@ func newWebHandler(cfg Config) (http.Handler, string) {
 	if origin != "" {
 		extra = " " + origin
 	}
-	csp := "default-src 'self'; script-src 'self'" + extra + "; style-src 'self' https://cdn.amoe.cc; font-src 'self' https://cdn-file.hyperos.mi.com; img-src 'self' https: data:; connect-src 'self'" + extra + "; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	csp := "default-src 'self'; script-src 'self'" + extra + "; style-src 'self' https://cdn.amoe.cc; font-src 'self' https://cdn-file.hyperos.mi.com; img-src 'self' https: data: blob:; connect-src 'self'" + extra + "; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	files := web.Files()
 	index, err := fs.ReadFile(files, "index.html")
 	marker := "<!--__NAILIST_RUNTIME__-->"

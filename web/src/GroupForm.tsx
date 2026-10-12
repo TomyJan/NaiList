@@ -1,32 +1,62 @@
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Upload, Undo2, X } from "lucide-react";
+import {
+  extractJoinLink,
+  initialGroupInput,
+  validateGroupInput,
+} from "./group-input";
+import { readGroupDraft, writeGroupDraft } from "./group-drafts";
 import type { Group, GroupInput } from "./types";
 
 export function GroupForm({
+  accountID,
   group,
   onClose,
   onSave,
 }: {
+  accountID: number;
   group: Group | null;
   onClose: () => void;
   onSave: (input: GroupInput) => Promise<void>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [input, setInput] = useState<GroupInput>({
-    organization: group?.organization || "",
-    keywords: group?.keywords.join(",") || "",
-    qqNumber: group?.qqNumber || "",
-    joinUrl: group?.joinUrl || "",
-  });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const qrGeneration = useRef(0);
+  const [original] = useState(() => initialGroupInput(group));
+  const [input, setInput] = useState<GroupInput>(
+    () => readGroupDraft(accountID, group?.id) ?? original,
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  useEffect(() => {
+    writeGroupDraft(accountID, group?.id, input);
+  }, [accountID, group?.id, input]);
   useEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      qrGeneration.current++;
+      dialog.close();
+    };
   }, []);
   const field = (key: keyof GroupInput, value: string) =>
-    setInput({ ...input, [key]: value });
+    setInput((current) => ({ ...current, [key]: value }));
+  const readQRCode = async (file: File) => {
+    const generation = ++qrGeneration.current;
+    setReading(true);
+    setError("");
+    try {
+      const { decodeGroupQRCode } = await import("./qr");
+      const link = await decodeGroupQRCode(file);
+      if (qrGeneration.current === generation) field("joinUrl", link);
+    } catch (error) {
+      if (qrGeneration.current === generation)
+        setError((error as Error).message);
+    } finally {
+      if (qrGeneration.current === generation) setReading(false);
+    }
+  };
   return (
     <dialog
       ref={ref}
@@ -36,13 +66,28 @@ export function GroupForm({
         else onClose();
       }}
       onClick={(e) => {
-        if (e.target === ref.current && !busy) onClose();
+        if (e.target !== ref.current || busy) return;
+        const bounds = ref.current!.getBoundingClientRect();
+        if (
+          e.clientX < bounds.left ||
+          e.clientX > bounds.right ||
+          e.clientY < bounds.top ||
+          e.clientY > bounds.bottom
+        )
+          onClose();
       }}
       aria-labelledby="form-title"
     >
       <form
+        noValidate
         onSubmit={async (e) => {
           e.preventDefault();
+          if (busy || reading) return;
+          const validationError = validateGroupInput(input);
+          if (validationError) {
+            setError(validationError);
+            return;
+          }
           setBusy(true);
           setError("");
           try {
@@ -71,7 +116,7 @@ export function GroupForm({
           <input
             autoFocus
             required
-            maxLength={100}
+            disabled={busy}
             value={input.organization}
             onChange={(e) => field("organization", e.target.value)}
             placeholder="兰州理工大学"
@@ -79,11 +124,13 @@ export function GroupForm({
         </label>
         <label>
           关键词
-          <span className="optional">
+          <span id="keywords-hint" className="optional">
             选填, 逗号分隔, 可填入学校缩写等, 方便搜索
           </span>
           <input
-            maxLength={500}
+            aria-label="关键词"
+            aria-describedby="keywords-hint"
+            disabled={busy}
             value={input.keywords}
             onChange={(e) => field("keywords", e.target.value)}
             placeholder="烂梨,兰理,兰理工,烂🍐"
@@ -94,25 +141,56 @@ export function GroupForm({
           <input
             required
             inputMode="numeric"
-            pattern="[1-9][0-9]{4,11}"
-            maxLength={12}
-            title="5～12 位数字"
+            disabled={busy}
+            pattern="[0-9]{5,11}"
+            maxLength={11}
+            title="5～11 位数字"
             value={input.qqNumber}
             onChange={(e) => field("qqNumber", e.target.value)}
             placeholder="123456789"
           />
         </label>
-        <label>
-          群链接
+        <div className="group-link-field">
+          <label htmlFor="group-link">群链接</label>
+          <div className="link-input">
+            <input
+              id="group-link"
+              required
+              type="url"
+              disabled={busy}
+              maxLength={2048}
+              value={input.joinUrl}
+              onChange={(e) => field("joinUrl", e.target.value)}
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData("text");
+                field("joinUrl", extractJoinLink(text) ?? text.trim());
+              }}
+              placeholder="https://qm.qq.com/q/…"
+            />
+            <button
+              type="button"
+              className="qr-upload"
+              disabled={busy || reading}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload size={16} />
+              {reading ? "解析中…" : "从二维码解析"}
+            </button>
+          </div>
           <input
-            required
-            type="url"
-            maxLength={2048}
-            value={input.joinUrl}
-            onChange={(e) => field("joinUrl", e.target.value)}
-            placeholder="https://qm.qq.com/…"
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            aria-label="上传群二维码"
+            hidden
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              if (file) void readQRCode(file);
+            }}
           />
-        </label>
+        </div>
         {error && (
           <p role="alert" className="error">
             {error}
@@ -121,13 +199,27 @@ export function GroupForm({
         <div className="modal-actions">
           <button
             type="button"
+            className="secondary undo-button"
+            disabled={busy}
+            onClick={() => {
+              qrGeneration.current++;
+              setReading(false);
+              setInput({ ...original });
+              setError("");
+            }}
+          >
+            <Undo2 size={16} />
+            撤销
+          </button>
+          <button
+            type="button"
             className="secondary"
             onClick={onClose}
             disabled={busy}
           >
             取消
           </button>
-          <button className="primary" disabled={busy}>
+          <button className="primary" disabled={busy || reading}>
             {busy ? "保存中…" : "保存"}
           </button>
         </div>

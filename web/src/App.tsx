@@ -15,6 +15,7 @@ import {
 import { api, writeOptions } from "./api";
 import { filterGroups } from "./search";
 import { GroupForm, DeleteDialog } from "./GroupForm";
+import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { AccountBindings, LoginDialog } from "./Account";
 import { SITE_VERSION } from "./runtime";
 import type { Group, GroupInput, User, LoginProvider } from "./types";
@@ -146,6 +147,7 @@ export default function App() {
       group ? `/api/groups/${group.id}` : "/api/groups",
       writeOptions(group ? "PUT" : "POST", user.csrfToken, input),
     );
+    clearGroupDraft(user.id, group?.id);
     setEditor(null);
     setRevision((v) => v + 1);
     setToast("已保存。群信息可能需要一分钟才能更新到首页, 请耐心等待");
@@ -156,6 +158,7 @@ export default function App() {
       `/api/groups/${deleting.id}`,
       writeOptions("DELETE", user.csrfToken),
     );
+    clearGroupDraft(user.id, deleting.id);
     setDeleting(null);
     setRevision((v) => v + 1);
     setToast("已删除");
@@ -245,6 +248,7 @@ export default function App() {
                             "/api/auth/logout",
                             writeOptions("POST", user.csrfToken),
                           );
+                          clearAccountDrafts(user.id);
                           setUser(null);
                           navigate("/");
                           setToast("已退出");
@@ -448,8 +452,9 @@ export default function App() {
           {toast}
         </div>
       )}
-      {editor && (
+      {editor && user && (
         <GroupForm
+          accountID={user.id}
           group={editor.group}
           onClose={() => setEditor(null)}
           onSave={save}

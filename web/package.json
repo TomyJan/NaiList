@@ -12,6 +12,7 @@
     "format": "prettier --write src e2e *.ts *.json index.html"
   },
   "dependencies": {
+    "jsqr": "1.4.0",
     "lucide-react": "^1.54.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
