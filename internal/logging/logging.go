@@ -2,12 +2,14 @@
 package logging
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -16,10 +18,10 @@ import (
 
 var (
 	urls             = regexp.MustCompile(`(?i)[a-z][a-z0-9+.-]*://[^\s"<>]+`)
-	credentials      = regexp.MustCompile(`(?i)("?(?:access_token|refresh_token|id_token|client_secret|password|code|state|nonce|verifier)"?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)`)
+	credentials      = regexp.MustCompile(`(?i)(\b"?(?:access_token|refresh_token|id_token|client_secret|password|code|state|nonce|verifier|csrf_token|session_hash|state_hash|authKey|busi_data|openid|unionid)"?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}\]]+)`)
 	bearer           = regexp.MustCompile(`(?i)Bearer\s+[^\s",;]+`)
 	jwt              = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b`)
-	providerHTTP     = regexp.MustCompile(`(?s)^(\d{3} [^:\n]+):.*$`)
+	providerHTTP     = regexp.MustCompile(`(?s)(\b\d{3} [^:\n]+):.*$`)
 	providerKeysHTTP = regexp.MustCompile(`(?s)(oidc: get keys failed: \d{3}).*`)
 )
 
@@ -57,6 +59,7 @@ func New(w io.Writer, level string, secrets ...string) (*slog.Logger, error) {
 			}
 		}
 	}
+	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })
 	clean := func(s string) string {
 		for _, secret := range values {
 			s = strings.ReplaceAll(s, secret, "[REDACTED]")
@@ -74,7 +77,11 @@ func New(w io.Writer, level string, secrets ...string) (*slog.Logger, error) {
 		s = bearer.ReplaceAllString(s, "Bearer [REDACTED]")
 		return jwt.ReplaceAllString(s, "[REDACTED JWT]")
 	}
-	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: threshold, ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+	handler := slog.NewTextHandler(newReliableWriter(w, clean), &slog.HandlerOptions{Level: threshold, ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+		if sensitiveKey(a.Key) {
+			a.Value = slog.StringValue("[REDACTED]")
+			return a
+		}
 		if a.Value.Kind() == slog.KindAny {
 			if err, ok := a.Value.Any().(error); ok {
 				var oauth *oauth2.RetrieveError
@@ -85,7 +92,7 @@ func New(w io.Writer, level string, secrets ...string) (*slog.Logger, error) {
 					if oauth.Response != nil {
 						status = oauth.Response.StatusCode
 					}
-					a.Value = slog.StringValue(fmt.Sprintf("OAuth token exchange: status=%d error_type=%s", status, clean(oauth.ErrorCode)))
+					a.Value = slog.StringValue(fmt.Sprintf("OAuth token exchange: status=%d error_type=%s", status, OAuthErrorCode(oauth.ErrorCode)))
 				case errors.As(err, &pg):
 					a.Value = slog.StringValue(clean(fmt.Sprintf("PostgreSQL: %s (SQLSTATE %s)", pg.Message, pg.Code)))
 				default:
@@ -99,6 +106,16 @@ func New(w io.Writer, level string, secrets ...string) (*slog.Logger, error) {
 					a.Value = slog.StringValue(clean(message))
 				}
 			}
+			if a.Value.Kind() == slog.KindAny {
+				// Opaque structured values are traversed, so nested credentials cannot bypass ReplaceAttr.
+				data, err := json.Marshal(a.Value.Any())
+				var value any
+				if err != nil || json.Unmarshal(data, &value) != nil {
+					a.Value = slog.StringValue("[unsupported value omitted]")
+				} else {
+					a.Value = slog.AnyValue(sanitizeTree(value, clean))
+				}
+			}
 		}
 		if a.Value.Kind() == slog.KindString {
 			a.Value = slog.StringValue(clean(a.Value.String()))
@@ -106,4 +123,47 @@ func New(w io.Writer, level string, secrets ...string) (*slog.Logger, error) {
 		return a
 	}})
 	return slog.New(handler), nil
+}
+
+func sensitiveKey(key string) bool {
+	switch strings.ToLower(strings.ReplaceAll(key, "-", "_")) {
+	case "access_token", "refresh_token", "id_token", "client_secret", "password", "code", "state", "nonce", "verifier", "code_verifier", "csrf_token", "session_hash", "state_hash", "session", "cookie", "set_cookie", "authorization", "token", "authkey", "busi_data", "openid", "unionid", "subject", "app_key", "api_key":
+		return true
+	}
+	return false
+}
+
+// OAuthErrorCode prevents a provider's arbitrary error field from leaking body data.
+func OAuthErrorCode(code string) string {
+	switch code {
+	case "invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "access_denied", "server_error", "temporarily_unavailable":
+		return code
+	case "":
+		return "unspecified"
+	default:
+		return "nonstandard"
+	}
+}
+
+func sanitizeTree(value any, clean func(string) string) any {
+	switch value := value.(type) {
+	case map[string]any:
+		for key, entry := range value {
+			if sensitiveKey(key) {
+				value[key] = "[REDACTED]"
+			} else {
+				value[key] = sanitizeTree(entry, clean)
+			}
+		}
+		return value
+	case []any:
+		for i, entry := range value {
+			value[i] = sanitizeTree(entry, clean)
+		}
+		return value
+	case string:
+		return clean(value)
+	default:
+		return value
+	}
 }

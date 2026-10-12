@@ -50,3 +50,17 @@ func TestLevelsAndRedaction(t *testing.T) {
 		t.Fatal("invalid level accepted")
 	}
 }
+
+func TestSecretKeysAndNestedValuesAreRedacted(t *testing.T) {
+	var out bytes.Buffer
+	logger, _ := New(&out, "debug")
+	logger.Debug("安全日志", "session_hash", "session-secret", "cookie", "cookie-secret", "openid", "identity-secret", "authKey", "qq-link-secret", "payload", map[string]any{"safe": "kept", "password": "nested-secret", "nested": map[string]any{"nonce": "nested-nonce"}}, slog.Group("credentials", "client_secret", "group-secret"))
+	for _, secret := range []string{"session-secret", "cookie-secret", "identity-secret", "qq-link-secret", "nested-secret", "nested-nonce", "group-secret"} {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("secret %s leaked: %s", secret, out.String())
+		}
+	}
+	if !strings.Contains(out.String(), "kept") {
+		t.Fatal("non-secret diagnostic lost")
+	}
+}

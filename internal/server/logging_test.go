@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/go-chi/chi/v5"
 	"log/slog"
 	"nailist/internal/groups"
 	"nailist/internal/logging"
@@ -11,7 +12,144 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestSemanticRequestLogsKeepAuthenticatedUser(t *testing.T) {
+	out := captureLogs(t, "debug")
+	handler := New(Config{}, nil, &memoryGroups{items: []groups.Group{{ID: 42, OwnerID: 8}}}).Routes()
+	r := httptest.NewRequest("GET", "/api/my/groups", nil)
+	r = r.WithContext(context.WithValue(r.Context(), userKey, User{ID: 8}))
+	r.Header.Set("X-Request-ID", "untrusted-request-secret")
+	r.Header.Set("X-Forwarded-For", "spoofed-client-secret")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	text := out.String()
+	for _, want := range []string{"event=http.request.started", "event=groups.list.completed", "event=http.request.completed", "operation=groups.mine", "user_id=8", "route=/api/my/groups", "count=1", "outcome=success", "peer_ip="} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %s: %s", want, text)
+		}
+	}
+	for _, secret := range []string{"untrusted-request-secret", "spoofed-client-secret"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("untrusted metadata logged: %s", text)
+		}
+	}
+}
+
+func TestGroupRejectionHasActionReasonAndSummary(t *testing.T) {
+	out := captureLogs(t, "debug")
+	handler := New(Config{PublicURL: "http://localhost:8080"}, nil, &memoryGroups{}).Routes()
+	r := httptest.NewRequest("POST", "/api/groups", strings.NewReader(`{"organization":"学校","qqNumber":"12","joinUrl":"https://qm.qq.com/q/test"}`))
+	r = r.WithContext(context.WithValue(r.Context(), userKey, User{ID: 8, CSRF: "right"}))
+	r.Header.Set("X-CSRF-Token", "right")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	text := out.String()
+	for _, want := range []string{"event=groups.save.rejected", "operation=groups.create", "reason=validation_failed", "user_id=8", "outcome=rejected", "status=400"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %s: %s", want, text)
+		}
+	}
+}
+
+func TestRequestSummaryDoesNotDuplicateInternalError(t *testing.T) {
+	out := captureLogs(t, "info")
+	New(Config{}, nil, &brokenGroups{}).Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/groups", nil))
+	if strings.Count(out.String(), "level=ERROR") != 1 {
+		t.Fatalf("internal error must be logged once: %s", out.String())
+	}
+	for _, want := range []string{"event=groups.list.failed", "operation=groups.list", "reason=store_failed", "error_kind=internal"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s: %s", want, out.String())
+		}
+	}
+}
+
+func TestRequestCancellationIsNotAnInternalError(t *testing.T) {
+	out := captureLogs(t, "debug")
+	r := chi.NewRouter()
+	r.Use(logRequest)
+	r.Get("/cancel", func(w http.ResponseWriter, r *http.Request) { failure(w, r, context.Canceled) })
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/cancel", nil).WithContext(ctx))
+	if strings.Contains(out.String(), "level=ERROR") || !strings.Contains(out.String(), "reason=client_canceled") {
+		t.Fatalf("wrong cancellation classification: %s", out.String())
+	}
+}
+
+func TestRequestDeadlineHasWarnSummary(t *testing.T) {
+	out := captureLogs(t, "debug")
+	h := logRequest(recoverRequest(requestTimeout(time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/groups", nil))
+	if w.Code != 504 || strings.Contains(out.String(), "level=ERROR") || !strings.Contains(out.String(), "outcome=timeout") || !strings.Contains(out.String(), "level=WARN") {
+		t.Fatalf("deadline classification/status incorrect: status=%d %s", w.Code, out.String())
+	}
+}
+
+func TestPostgresHealthCancellationAndTimeoutLevels(t *testing.T) {
+	db := authTestDB(t)
+	for _, mode := range []string{"canceled", "timeout"} {
+		t.Run(mode, func(t *testing.T) {
+			out := captureLogs(t, "debug")
+			ctx, cancel := context.WithCancel(t.Context())
+			if mode == "timeout" {
+				cancel()
+				ctx, cancel = context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+			}
+			cancel()
+			New(Config{}, db, &memoryGroups{}).Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/health", nil).WithContext(ctx))
+			if strings.Contains(out.String(), "level=ERROR") || !strings.Contains(out.String(), "outcome="+mode) {
+				t.Fatalf("health failure misclassified: %s", out.String())
+			}
+		})
+	}
+}
+
+func TestRequestPanicAfterWriteKeepsOriginalBody(t *testing.T) {
+	out := captureLogs(t, "debug")
+	h := logRequest(recoverRequest(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("partial"))
+		panic("unexpected failure")
+	})))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/groups", nil))
+	if w.Body.String() != "partial" || strings.Count(out.String(), "level=ERROR") != 1 || !strings.Contains(out.String(), "outcome=failed") {
+		t.Fatalf("panic response/log incorrect: %s %s", w.Body.String(), out.String())
+	}
+}
+
+func TestRequestAbortIsNotSuccess(t *testing.T) {
+	out := captureLogs(t, "debug")
+	h := logRequest(recoverRequest(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })))
+	func() {
+		defer func() {
+			if recover() != http.ErrAbortHandler {
+				t.Fatal("abort must propagate to net/http")
+			}
+		}()
+		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/groups", nil))
+	}()
+	if strings.Contains(out.String(), "status=200") || strings.Contains(out.String(), "level=ERROR") || !strings.Contains(out.String(), "outcome=canceled") || !strings.Contains(out.String(), "response_started=false") {
+		t.Fatalf("abort reported success: %s", out.String())
+	}
+}
+
+func TestRawResponseWriteFailureIsLoggedOnce(t *testing.T) {
+	out := captureLogs(t, "debug")
+	h := logRequest(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first"))
+		_, _ = w.Write([]byte("second"))
+	}))
+	h.ServeHTTP(&disconnectedWriter{header: make(http.Header)}, httptest.NewRequest("GET", "/asset.js", nil))
+	if strings.Count(out.String(), "event=http.response.write_failed") != 1 || !strings.Contains(out.String(), "outcome=failed") || !strings.Contains(out.String(), "reason=response_write_failed") {
+		t.Fatalf("raw response failure unobserved/duplicated: %s", out.String())
+	}
+}
 
 func captureLogs(t *testing.T, level string) *bytes.Buffer {
 	t.Helper()
@@ -68,8 +206,8 @@ func TestRequestLogsAndNoise(t *testing.T) {
 		t.Fatalf("routine polling/static requests polluted INFO: %s", out.String())
 	}
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/missing", nil))
-	if !strings.Contains(out.String(), "level=WARN") {
-		t.Fatal("4xx request not logged at WARN")
+	if !strings.Contains(out.String(), "level=INFO") || !strings.Contains(out.String(), "reason=route_not_found") {
+		t.Fatal("unmatched route must have an INFO summary and a specific reason")
 	}
 }
 
