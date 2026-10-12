@@ -1,8 +1,14 @@
-name: Check Code
+name: Build and Check
 
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        description: Archive version; defaults to dev-<commit>
+        type: string
+        required: false
+        default: ""
   push:
     branches: [master, main]
   pull_request:
@@ -145,6 +151,61 @@ jobs:
           path: |
             web/test-results
             server.log
+          retention-days: 7
+
+  binaries:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux]
+        goarch: [amd64]
+        # 恢复其他平台时使用以下矩阵：
+        # goos: [linux, darwin, windows]
+        # goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Build and package application
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ inputs.version || format('dev-{0}', github.sha) }}
+        shell: bash
+        run: |
+          mkdir -p bundle/web
+          binary=nailist
+          if [ "$GOOS" = windows ]; then binary=nailist.exe; fi
+          go build -trimpath -ldflags='-s -w' -o "bundle/$binary" ./cmd/server
+          cp -R web/dist bundle/web/dist
+          cp README.md LICENSE .env.example bundle/
+          cp web/ASSETS.md bundle/web/
+          archive="nailist-$VERSION-$GOOS-$GOARCH"
+          if [ "$GOOS" = windows ]; then
+            (cd bundle && zip -qr "../$archive.zip" .)
+          else
+            tar -czf "$archive.tar.gz" -C bundle .
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            nailist-*.tar.gz
+            nailist-*.zip
+          if-no-files-found: error
           retention-days: 7
 
   docker:
