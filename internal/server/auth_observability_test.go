@@ -122,6 +122,7 @@ func TestOIDCDiscoveryBodyInterruptionSeverity(t *testing.T) {
 				ctx, cancel = context.WithTimeout(t.Context(), 100*time.Millisecond)
 				defer cancel()
 			}
+			releaseBody := make(chan struct{})
 			upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
@@ -129,9 +130,12 @@ func TestOIDCDiscoveryBodyInterruptionSeverity(t *testing.T) {
 				if mode == "canceled" {
 					cancel()
 				}
-				<-r.Context().Done()
+				// Keep the body open until the client observes its interruption;
+				// returning on server cancellation can race a clean EOF with timeout.
+				<-releaseBody
 			}))
 			defer upstream.Close()
+			defer close(releaseBody)
 			s := New(Config{PublicURL: "https://groups.example", OIDC: OIDCConfig{ID: "campus", Name: "校园", Issuer: upstream.URL, ClientID: "client"}}, nil, &memoryGroups{})
 			s.client = upstream.Client()
 			if mode == "client_timeout" {
