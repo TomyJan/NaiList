@@ -160,7 +160,7 @@ test("管理页添加、编辑、删除、退出", async ({ page }) => {
   await page.getByRole("button", { name: "账户菜单" }).click();
   await page.getByRole("menuitem", { name: "退出登录" }).click();
   await expect(
-    page.getByRole("link", { name: "登录", exact: true }),
+    page.getByRole("button", { name: "登录", exact: true }),
   ).toBeVisible();
 });
 test("失败可重试，空搜索提示", async ({ page }) => {
@@ -178,4 +178,113 @@ test("失败可重试，空搜索提示", async ({ page }) => {
   await expect(page.locator("article")).toHaveCount(3);
   await page.getByRole("textbox", { name: "搜索奶群" }).fill("不存在");
   await expect(page.getByText("没有匹配的奶群")).toBeVisible();
+});
+
+const loginProviders = [
+  { id: "qq", name: "QQ", icon: "", loginUrl: "/auth/qq" },
+  {
+    id: "campus",
+    name: "校园账号",
+    icon: "/nailong.png",
+    loginUrl: "/auth/campus",
+  },
+];
+
+test("选择登录方式和无可用登录提示", async ({ page }) => {
+  await page.route("**/api/me", (r) => r.fulfill({ json: null }));
+  await page.route("**/api/groups", (r) => r.fulfill({ json: [] }));
+  await page.route("**/api/auth/providers", (r) =>
+    r.fulfill({ json: loginProviders }),
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("link", { name: "QQ 登录" })).toHaveAttribute(
+    "href",
+    "/auth/qq",
+  );
+  await expect(
+    page.getByRole("link", { name: "校园账号 登录" }),
+  ).toHaveAttribute("href", "/auth/campus");
+  await page.getByRole("button", { name: "关闭" }).click();
+  await page.route("**/api/auth/providers", (r) => r.fulfill({ json: [] }));
+  await page.reload();
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByText("暂无可用登录方式")).toBeVisible();
+});
+
+test("绑定面板、确认、冲突和永久绑定", async ({ page }) => {
+  let bindCalls = 0;
+  await page.route("**/api/me", (r) =>
+    r.fulfill({
+      json: {
+        id: 1,
+        nickname: "测试用户",
+        avatarUrl: "",
+        csrfToken: "csrf",
+        identities: [{ providerId: "qq", nickname: "QQ用户", avatarUrl: "" }],
+      },
+    }),
+  );
+  await page.route("**/api/my/groups", (r) => r.fulfill({ json: seed }));
+  await page.route("**/api/auth/providers", (r) =>
+    r.fulfill({ json: loginProviders }),
+  );
+  await page.route("**/api/auth/bind/campus", (r) => {
+    bindCalls++;
+    expect(r.request().method()).toBe("POST");
+    expect(r.request().headers()["x-csrf-token"]).toBe("csrf");
+    return r.fulfill({
+      status: 409,
+      json: { error: "此登录身份已绑定其他账号" },
+    });
+  });
+  await page.goto("/manage");
+  await expect(page.getByRole("heading", { name: "账号绑定" })).toBeVisible();
+  await expect(page.getByText("QQ用户", { exact: true })).toBeVisible();
+  await expect(page.getByText("已绑定", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "解绑" })).toHaveCount(0);
+  await page.getByRole("button", { name: "绑定 校园账号" }).click();
+  await expect(page.getByRole("dialog")).toContainText("不可解绑");
+  expect(bindCalls).toBe(0);
+  await page.getByRole("button", { name: "继续绑定" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "此登录身份已绑定其他账号",
+  );
+  expect(bindCalls).toBe(1);
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page.screenshot({
+    path: "../.superpowers/evidence/bindings.png",
+    fullPage: true,
+  });
+  await page.route("**/api/me", (r) =>
+    r.fulfill({
+      json: {
+        id: 1,
+        nickname: "测试用户",
+        avatarUrl: "",
+        csrfToken: "csrf",
+        identities: loginProviders.map((p) => ({
+          providerId: p.id,
+          nickname: p.name + "用户",
+          avatarUrl: "",
+        })),
+      },
+    }),
+  );
+  await page.route("**/api/auth/bind/campus", (r) =>
+    r.fulfill({ json: { url: "/manage?bound=1" } }),
+  );
+  await page.getByRole("button", { name: "绑定 校园账号" }).click();
+  await page.getByRole("button", { name: "继续绑定" }).click();
+  await expect(page).toHaveURL(/\/manage\?bound=1|\/manage$/);
+  await expect(page.getByText("已绑定", { exact: true })).toHaveCount(3);
+  await expect(page.getByRole("button", { name: /^绑定 / })).toHaveCount(0);
 });

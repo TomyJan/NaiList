@@ -742,3 +742,112 @@ h1 {
     border-color: #41594a;
   }
 }
+
+.bindings {
+  padding: 22px 24px;
+  margin-bottom: 30px;
+  border: 1px solid #dfe8dd;
+  border-radius: 16px;
+  background: #fff;
+}
+.bindings-heading,
+.bindings-heading h2,
+.binding-row,
+.provider-login {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bindings-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.bindings-heading h2 {
+  font-size: 16px;
+  gap: 8px;
+}
+.bindings-heading > span {
+  color: #788675;
+  font-size: 12px;
+}
+.binding-list {
+  display: grid;
+  gap: 12px;
+}
+.binding-row {
+  min-width: 0;
+  padding: 8px 0;
+}
+.provider-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.binding-row > svg {
+  flex-shrink: 0;
+}
+.binding-info {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.binding-info > span {
+  color: #788675;
+  font-size: 12px;
+}
+.bound-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #477835;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.binding-row .secondary {
+  flex-shrink: 0;
+}
+.login-options {
+  display: grid;
+  gap: 12px;
+}
+.provider-login {
+  border: 1px solid #dfe8dd;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.provider-login:hover {
+  background: #f0f7e9;
+}
+.login-modal p {
+  color: #788675;
+}
+@media (max-width: 700px) {
+  .bindings {
+    padding: 18px 16px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .bindings {
+    background: #1b261f;
+    border-color: #35443a;
+  }
+  .bindings-heading > span,
+  .binding-info > span,
+  .login-modal p {
+    color: #a4b4a7;
+  }
+  .bound-label {
+    color: #b7db92;
+  }
+  .provider-login {
+    border-color: #35443a;
+  }
+  .provider-login:hover {
+    background: #263629;
+  }
+}

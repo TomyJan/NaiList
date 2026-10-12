@@ -15,13 +15,18 @@ import {
 import { api, writeOptions } from "./api";
 import { filterGroups } from "./search";
 import { GroupForm, DeleteDialog } from "./GroupForm";
-import type { Group, GroupInput, User } from "./types";
+import { AccountBindings, LoginDialog } from "./Account";
+import type { Group, GroupInput, User, LoginProvider } from "./types";
 
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const manage = path === "/manage";
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
+  const [providers, setProviders] = useState<
+    LoginProvider[] | null | undefined
+  >(undefined);
+  const [loginDialog, setLoginDialog] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,10 +63,27 @@ export default function App() {
       .finally(() => {
         if (!controller.signal.aborted) setAuthLoaded(true);
       });
-    const authError = new URLSearchParams(location.search).get("auth_error");
+    api<LoginProvider[]>("/api/auth/providers", { signal: controller.signal })
+      .then((data) => setProviders(Array.isArray(data) ? data : []))
+      .catch((error) => {
+        if (error.name !== "AbortError") setProviders(null);
+      });
+    const params = new URLSearchParams(location.search);
+    if (params.has("bound")) {
+      setToast("已绑定");
+      history.replaceState(null, "", location.pathname);
+    }
+    const authError = params.get("auth_error");
     if (authError) {
       setToast(
-        authError === "unconfigured" ? "QQ 登录尚未配置" : "QQ 登录失败",
+        (
+          {
+            unconfigured: "登录方式未配置",
+            identity_conflict: "此登录身份已绑定其他账号",
+            already_bound: "此账号已绑定该登录方式",
+            session_changed: "登录状态已变化，请重新绑定",
+          } as Record<string, string>
+        )[authError] || "登录或绑定失败，请重试",
       );
       history.replaceState(null, "", location.pathname);
     }
@@ -234,9 +256,9 @@ export default function App() {
                 )}
               </div>
             ) : authLoaded ? (
-              <a className="login" href="/auth/qq">
+              <button className="login" onClick={() => setLoginDialog(true)}>
                 登录
-              </a>
+              </button>
             ) : (
               <span className="auth-skeleton" />
             )}
@@ -244,6 +266,9 @@ export default function App() {
         </div>
       </header>
       <main className="main">
+        {manage && user && (
+          <AccountBindings user={user} providers={providers} />
+        )}
         <section className="page-heading">
           <div>
             <h1>
@@ -264,9 +289,9 @@ export default function App() {
         {manage && authLoaded && !user ? (
           <div className="empty">
             <p>登录后管理奶群</p>
-            <a className="primary" href="/auth/qq">
-              QQ 登录
-            </a>
+            <button className="primary" onClick={() => setLoginDialog(true)}>
+              登录
+            </button>
           </div>
         ) : (
           <>
@@ -380,6 +405,12 @@ export default function App() {
           </>
         )}
       </main>
+      {loginDialog && (
+        <LoginDialog
+          providers={providers}
+          onClose={() => setLoginDialog(false)}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           {toast}
