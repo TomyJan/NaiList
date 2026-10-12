@@ -14,7 +14,7 @@ COPY internal/ ./internal/
 COPY migrations/ ./migrations/
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nailist ./cmd/server
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 nailist \
     && adduser -S -D -H -u 10001 -G nailist nailist \
