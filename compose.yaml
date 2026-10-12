@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nailist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置数据库密码}
+      POSTGRES_DB: nailist
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nailist -d nailist"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      LISTEN_ADDR: ":8080"
+      WEB_DIR: /app/web/dist
+      DATABASE_URL: postgres://nailist:${POSTGRES_PASSWORD}@db:5432/nailist?sslmode=disable
+      PUBLIC_URL: ${PUBLIC_URL:?请在 .env 中设置站点 HTTPS 根地址}
+      QQ_APP_ID: ${QQ_APP_ID:-}
+      QQ_APP_KEY: ${QQ_APP_KEY:-}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
