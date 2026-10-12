@@ -19,16 +19,13 @@ import (
 	"time"
 )
 
-func env(k, fallback string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return fallback
-}
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		fmt.Println("nailist " + Version)
 		return
+	}
+	if err := loadEnvironment(); err != nil {
+		log.Fatal("加载 .env 失败，请检查文件权限和格式")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -37,7 +34,7 @@ func main() {
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.Path != "" {
 		log.Fatal("PUBLIC_URL 必须是站点源地址")
 	}
-	db, err := pgxpool.New(ctx, env("DATABASE_URL", "postgres://nailist:nailist@localhost:5432/nailist?sslmode=disable"))
+	db, err := pgxpool.New(ctx, databaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,7 +58,7 @@ func main() {
 		log.Fatal(err)
 	}
 	s := server.New(cfg, db, groups.Store{DB: db})
-	httpServer := &http.Server{Addr: env("LISTEN_ADDR", ":8080"), Handler: s.Routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	httpServer := &http.Server{Addr: listenAddr(), Handler: s.Routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

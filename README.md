@@ -2,9 +2,9 @@
 
 Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。前端内嵌在 Go 二进制中，由同一服务提供页面和 API。
 
-## Docker 部署
+## 配置
 
-需要 Docker Compose。复制 `.env.example` 为 `.env`，设置数据库密码和站点地址（数据库密码用随机字母数字，避免连接串转义问题）：
+Docker 和裸跑共用 `.env.example`。复制为工作目录下的 `.env`，设置数据库密码、站点地址和登录方式；也可以直接传入同名环境变量。优先级：**进程环境变量 > `.env` > 默认值**。密码包含 `$`、`#` 等字符时用单引号包裹。
 
 ```env
 POSTGRES_PASSWORD=随机的长密码
@@ -14,7 +14,13 @@ QQ_APP_KEY=QQ互联应用密钥
 APP_PORT=8080
 ```
 
-启动全部服务：
+数据库用户和库名默认均为 `nailist`，密码使用 `POSTGRES_PASSWORD`；裸跑默认连接 `127.0.0.1:5432`，Compose 默认连接 `db:5432`。可用 `POSTGRES_HOST`、`POSTGRES_PORT` 修改地址，或用优先级更高的 `DATABASE_URL` 指定完整连接串（含自定义用户、库名和 TLS 参数）。
+
+`APP_PORT` 是访问端口；裸跑默认监听 `:APP_PORT`，可用 `LISTEN_ADDR` 覆盖。Compose 内部固定监听 `:8080`，对外映射到 `127.0.0.1:APP_PORT`。
+
+## Docker 部署
+
+需要 Docker Compose。完成上方配置后，在仓库目录启动全部服务：
 
 ```sh
 docker compose up -d --build
@@ -37,21 +43,18 @@ location / {
 
 ## 二进制部署
 
-需要 PostgreSQL 16+。从 GitHub Releases 下载 `nailist-X.Y.Z-linux-amd64`，重命名为 `nailist`，设置环境变量后直接运行，无需解压、Node.js 或单独部署前端：
+需要 PostgreSQL 16+。从 GitHub Releases 下载 `nailist-X.Y.Z-linux-amd64`，重命名为 `nailist`，参照 `.env.example` 创建工作目录下的 `.env` 后直接运行：
 
 ```sh
 chmod +x nailist
-export DATABASE_URL='postgres://nailist:密码@127.0.0.1:5432/nailist?sslmode=disable'
-export PUBLIC_URL='https://群列表域名'
-export LISTEN_ADDR='127.0.0.1:8080'
 ./nailist
 ```
 
-QQ/OIDC 环境变量见下方「登录方式与账号绑定」，HTTPS 反向代理配置同 Docker 部署。程序不会自动读取 `.env`；请通过 Shell 或服务管理器传入环境变量。启动时自动迁移数据库，更新时备份数据库、停止服务、替换二进制并重启即可。默认无需 `WEB_DIR`；仅需要覆盖内嵌前端时设置为外置资源目录。
+程序自动加载 `.env`，文件不存在时使用环境变量；格式错误时拒绝启动。无需解压、Node.js 或单独部署前端。QQ/OIDC 配置见下方「登录方式与账号绑定」，HTTPS 反向代理配置同 Docker 部署。启动时自动迁移数据库，更新时备份数据库、停止服务、替换二进制并重启即可。默认无需 `WEB_DIR`；仅需要覆盖内嵌前端时设置为外置资源目录。
 
 ## 本地开发
 
-需要 Go 1.25+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并设置环境变量：`DATABASE_URL`、`PUBLIC_URL`、`QQ_APP_ID` 和 `QQ_APP_KEY`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
+需要 Go 1.25+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并在仓库根目录配置 `.env`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
 
 ```sh
 cd web && pnpm install --frozen-lockfile && pnpm run build && cd ..
@@ -64,7 +67,7 @@ go run ./cmd/server
 go build -trimpath -ldflags="-s -w" -o nailist ./cmd/server
 ```
 
-访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。`.env.example` 是配置参考，Go 程序直接读取进程环境变量。
+访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。
 
 ## 功能与验证
 

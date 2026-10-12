@@ -19,7 +19,10 @@ services:
     restart: unless-stopped
     environment:
       LISTEN_ADDR: ":8080"
-      DATABASE_URL: postgres://nailist:${POSTGRES_PASSWORD}@db:5432/nailist?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:-}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PUBLIC_URL: ${PUBLIC_URL:?请在 .env 中设置站点 HTTPS 根地址}
       QQ_APP_ID: ${QQ_APP_ID:-}
       QQ_APP_KEY: ${QQ_APP_KEY:-}
@@ -31,6 +34,7 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_SCOPES: ${OIDC_SCOPES:-}
+      WEB_DIR: ${WEB_DIR:-}
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     depends_on:
