@@ -67,6 +67,7 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api/admin", func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Use(s.requireAdmin)
+		r.Get("/stats", s.adminStats)
 		r.Get("/users", s.adminUsers)
 		r.Get("/groups", s.adminGroups)
 		r.Group(func(r chi.Router) {

@@ -36,14 +36,16 @@ func TestAdminAuthenticationAndAuthorization(t *testing.T) {
 		token  string
 		status int
 	}{{"", 401}, {token, 403}} {
-		r := httptest.NewRequest("GET", "/api/admin/users", nil)
-		if tc.token != "" {
-			r.AddCookie(&http.Cookie{Name: "nailist_session", Value: tc.token})
-		}
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		if w.Code != tc.status {
-			t.Fatalf("admin authorization: got %d want %d: %s", w.Code, tc.status, w.Body.String())
+		for _, path := range []string{"/api/admin/users", "/api/admin/groups", "/api/admin/stats"} {
+			r := httptest.NewRequest("GET", path, nil)
+			if tc.token != "" {
+				r.AddCookie(&http.Cookie{Name: "nailist_session", Value: tc.token})
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("admin authorization: got %d want %d: %s", w.Code, tc.status, w.Body.String())
+			}
 		}
 	}
 }
@@ -101,6 +103,17 @@ func TestAdminPostgresManagement(t *testing.T) {
 	expect(w, 200)
 	if strings.Contains(w.Body.String(), "subject") || strings.Contains(w.Body.String(), "issuer") || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal(w.Body.String())
+	}
+	stats := request("GET", "/api/admin/stats", "", token, "")
+	expect(stats, 200)
+	var overview struct {
+		Users int `json:"users"`
+		Daily []struct {
+			Date string `json:"date"`
+		} `json:"daily"`
+	}
+	if err := json.Unmarshal(stats.Body.Bytes(), &overview); err != nil || overview.Users != 3 || len(overview.Daily) != 30 || stats.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("admin overview: %s %v", stats.Body.String(), err)
 	}
 	path := fmt.Sprintf("/api/admin/users/%d", target)
 	expect(request("DELETE", path+"/identities/qq", "", token, ""), 403)

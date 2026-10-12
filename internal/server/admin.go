@@ -138,3 +138,15 @@ func (s *Server) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
 	requestLogger(r).InfoContext(r.Context(), "管理员已保存奶群信息及归属", "component", "admin", "event", "admin.group.saved", "outcome", "success", "admin_id", r.Context().Value(userKey).(User).ID, "group_id", id, "old_owner_id", old, "new_owner_id", in.OwnerID, "organization", saved.Organization, "qq_number", saved.QQNumber, "keyword_count", len(saved.Keywords), "link_format", joinLinkFormat(saved.JoinURL), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, saved)
 }
+
+func (s *Server) adminStats(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "开始聚合站点概览及近 30 天新增趋势", "component", "admin", "event", "admin.stats.started", "timezone", "Asia/Shanghai", "days", 30, "scope", "current_users_active_groups")
+	stats, err := (admin.Store{DB: s.db}).Stats(r.Context())
+	if err != nil {
+		failure(w, r, err)
+		return
+	}
+	requestLogger(r).DebugContext(r.Context(), "站点统计聚合完成，日期缺口已补零", "component", "admin", "event", "admin.stats.completed", "users", stats.Users, "groups", stats.Groups, "contributors", stats.Contributors, "organizations", stats.Organizations, "days", len(stats.Daily), "duration_ms", logging.DurationMS(started))
+	respond(w, r, 200, stats)
+}

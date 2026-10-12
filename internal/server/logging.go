@@ -81,6 +81,8 @@ func requestErrorLogged(r *http.Request) {
 func requestOperation(r *http.Request) (string, string) {
 	path := r.URL.Path
 	switch {
+	case path == "/api/admin/stats" && r.Method == "GET":
+		return "admin.stats", "获取站点统计与每日新增趋势"
 	case path == "/api/admin/users" && r.Method == "GET":
 		return "admin.users.list", "获取全站账号与登录方式"
 	case path == "/api/admin/groups" && r.Method == "GET":
@@ -115,7 +117,7 @@ func requestOperation(r *http.Request) (string, string) {
 		return "auth.begin", "发起登录授权"
 	case path == "/api/health":
 		return "health.check", "检查服务与数据库健康"
-	case path == "/" || path == "/manage" || path == "/admin/users" || path == "/admin/groups" || path == "/index.html":
+	case path == "/" || path == "/manage" || path == "/admin" || path == "/admin/" || path == "/admin/users" || path == "/admin/groups" || path == "/index.html":
 		return "web.page", "加载应用页面"
 	case strings.HasPrefix(path, "/api/"):
 		return "http.unmatched", "访问未匹配接口"

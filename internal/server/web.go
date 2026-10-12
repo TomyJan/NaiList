@@ -61,7 +61,7 @@ func newWebHandler(cfg Config) (http.Handler, string) {
 			http.NotFound(w, r)
 			return
 		}
-		if r.URL.Path == "/" || r.URL.Path == "/manage" || r.URL.Path == "/admin/users" || r.URL.Path == "/admin/groups" || r.URL.Path == "/index.html" {
+		if r.URL.Path == "/" || r.URL.Path == "/manage" || r.URL.Path == "/admin" || r.URL.Path == "/admin/" || r.URL.Path == "/admin/users" || r.URL.Path == "/admin/groups" || r.URL.Path == "/index.html" {
 			if err != nil || configErr != nil {
 				http.Error(w, "前端或统计配置无效，请检查配置并重新构建前端", http.StatusServiceUnavailable)
 				return
