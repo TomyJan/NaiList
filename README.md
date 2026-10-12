@@ -1,8 +1,8 @@
 # 奶龙群列表
 
-Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。
+Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。前端内嵌在 Go 二进制中，由同一服务提供页面和 API。
 
-## 部署
+## Docker 部署
 
 需要 Docker Compose。复制 `.env.example` 为 `.env`，设置数据库密码和站点地址（数据库密码用随机字母数字，避免连接串转义问题）：
 
@@ -35,6 +35,20 @@ location / {
 
 在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose up -d --build`。备份：`docker compose exec -T db pg_dump -U nailist nailist > backup.sql`。恢复：`docker compose exec -T db psql -U nailist nailist < backup.sql`（恢复到空数据库）。
 
+## 二进制部署
+
+需要 PostgreSQL 16+。从 GitHub Releases 下载 `nailist-X.Y.Z-linux-amd64`，重命名为 `nailist`，设置环境变量后直接运行，无需解压、Node.js 或单独部署前端：
+
+```sh
+chmod +x nailist
+export DATABASE_URL='postgres://nailist:密码@127.0.0.1:5432/nailist?sslmode=disable'
+export PUBLIC_URL='https://群列表域名'
+export LISTEN_ADDR='127.0.0.1:8080'
+./nailist
+```
+
+QQ/OIDC 环境变量见下方「登录方式与账号绑定」，HTTPS 反向代理配置同 Docker 部署。程序不会自动读取 `.env`；请通过 Shell 或服务管理器传入环境变量。启动时自动迁移数据库，更新时备份数据库、停止服务、替换二进制并重启即可。默认无需 `WEB_DIR`；仅需要覆盖内嵌前端时设置为外置资源目录。
+
 ## 本地开发
 
 需要 Go 1.25+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并设置环境变量：`DATABASE_URL`、`PUBLIC_URL`、`QQ_APP_ID` 和 `QQ_APP_KEY`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
@@ -42,6 +56,12 @@ location / {
 ```sh
 cd web && pnpm install --frozen-lockfile && pnpm run build && cd ..
 go run ./cmd/server
+```
+
+运行 Go 构建、测试前，必须先构建前端（`web/dist` 不提交到仓库）。构建后端时前端资源会一并嵌入，修改前端后需要重新构建并启动 Go 服务。生成可部署二进制：
+
+```sh
+go build -trimpath -ldflags="-s -w" -o nailist ./cmd/server
 ```
 
 访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。`.env.example` 是配置参考，Go 程序直接读取进程环境变量。
@@ -60,13 +80,11 @@ cd web && pnpm test && pnpm run build
 
 ## 自动检查与发版
 
-Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供Linux x64 `binary-linux-amd64` 压缩包（含前端、配置示例和说明），保留 7 天；开发包名包含提交 SHA。普通 Build 只检查 Docker 构建，不推送镜像。
+Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-dev-<commit>-linux-amd64`，前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
 
 发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；无标签时从 `web/package.json` 的 `0.1.0` 起算，首次默认发 `v0.1.1`。工作流同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，并原子推送默认分支与同名标签；主分支保护规则需允许工作流推送。随后检查、二进制和镜像均使用该发布提交。若默认分支在操作期间更新，推送会失败，需重新触发。
 
-检查全部通过后，发布包含前端的 Linux x64 压缩包及 SHA256 校验文件，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外 Secret。仓库/组织需允许 Actions 及 `packages: write` 权限；镜像公开下载需将 GHCR 包设为公开。可通过 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
-
-使用二进制包时，解压后设置 `DATABASE_URL`、`PUBLIC_URL` 和 QQ 环境变量，在解压目录运行 `./nailist`（Windows 为 `nailist.exe`），或通过 `WEB_DIR` 指定解压后的 `web/dist`。
+检查全部通过后，发布 Linux x64 裸二进制 `nailist-X.Y.Z-linux-amd64` 及 `SHA256SUMS.txt`，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外 Secret。仓库/组织需允许 Actions 及 `packages: write` 权限；镜像公开下载需将 GHCR 包设为公开。可通过 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
 
 后端版本可执行 `./nailist --version` 查看，前端版本写入页面 `<html data-version="X.Y.Z">`。
 

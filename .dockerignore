@@ -5,6 +5,7 @@
 .superpowers
 **/node_modules
 web/dist
+/dist
 **/test-results
 **/playwright-report
 **/*.tsbuildinfo

@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: binary-*
+          pattern: nailist-*
           merge-multiple: true
           path: release-assets
       - name: Create checksums and publish

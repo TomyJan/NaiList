@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Archive version; defaults to dev-<commit>
+        description: Binary version; defaults to dev-<commit>
         type: string
         required: false
         default: ""
@@ -28,6 +28,7 @@ concurrency:
 jobs:
   backend:
     name: Go checks and PostgreSQL tests
+    needs: frontend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -52,9 +53,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
       - name: Format and vet
         run: |
-          test -z "$(gofmt -l cmd internal migrations)"
+          test -z "$(gofmt -l cmd internal migrations web/assets.go)"
           go vet ./...
       - name: Workflow syntax
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml
@@ -193,7 +198,7 @@ jobs:
         with:
           name: web-dist
           path: web/dist
-      - name: Build and package application
+      - name: Build standalone application
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -201,25 +206,14 @@ jobs:
           VERSION: ${{ inputs.version || format('dev-{0}', github.sha) }}
         shell: bash
         run: |
-          mkdir -p bundle/web
-          binary=nailist
-          if [ "$GOOS" = windows ]; then binary=nailist.exe; fi
-          go build -trimpath -ldflags='-s -w' -o "bundle/$binary" ./cmd/server
-          cp -R web/dist bundle/web/dist
-          cp README.md LICENSE .env.example bundle/
-          cp web/ASSETS.md bundle/web/
-          archive="nailist-$VERSION-$GOOS-$GOARCH"
-          if [ "$GOOS" = windows ]; then
-            (cd bundle && zip -qr "../$archive.zip" .)
-          else
-            tar -czf "$archive.tar.gz" -C bundle .
-          fi
+          mkdir -p dist
+          binary="nailist-$VERSION-$GOOS-$GOARCH"
+          if [ "$GOOS" = windows ]; then binary="$binary.exe"; fi
+          go build -trimpath -ldflags='-s -w' -o "dist/$binary" ./cmd/server
       - uses: actions/upload-artifact@v7
         with:
-          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            nailist-*.tar.gz
-            nailist-*.zip
+          path: dist/nailist-*
+          archive: false
           if-no-files-found: error
           retention-days: 7
 

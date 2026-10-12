@@ -19,7 +19,6 @@ services:
     restart: unless-stopped
     environment:
       LISTEN_ADDR: ":8080"
-      WEB_DIR: /app/web/dist
       DATABASE_URL: postgres://nailist:${POSTGRES_PASSWORD}@db:5432/nailist?sslmode=disable
       PUBLIC_URL: ${PUBLIC_URL:?请在 .env 中设置站点 HTTPS 根地址}
       QQ_APP_ID: ${QQ_APP_ID:-}

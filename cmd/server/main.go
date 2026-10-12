@@ -50,7 +50,7 @@ func main() {
 	if err = migrate(startup, db); err != nil {
 		log.Fatal("迁移失败：", err)
 	}
-	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY"), WebDir: env("WEB_DIR", "web/dist")}
+	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY"), WebDir: os.Getenv("WEB_DIR")}
 	unionID, err := strconv.ParseBool(env("QQ_USE_UNIONID", "false"))
 	if err != nil {
 		log.Fatal("QQ_USE_UNIONID 必须为 true 或 false")
