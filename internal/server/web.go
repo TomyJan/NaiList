@@ -5,6 +5,7 @@ import (
 	"errors"
 	"html"
 	"io/fs"
+	"log/slog"
 	"nailist/web"
 	"net/http"
 	"net/url"
@@ -43,6 +44,12 @@ func newWebHandler(cfg Config) (http.Handler, string) {
 	marker := "<!--__NAILIST_RUNTIME__-->"
 	if err == nil && !bytes.Contains(index, []byte(marker)) {
 		err = errors.New("missing runtime placeholder")
+	}
+	if err != nil {
+		slog.Error("准备内嵌前端失败", "error", err)
+	}
+	if configErr != nil {
+		slog.Error("前端运行配置无效", "error", configErr)
 	}
 	runtimeHTML := `<meta name="nailist-version" content="` + html.EscapeString(cfg.Version) + `" />`
 	if origin != "" {

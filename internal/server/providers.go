@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"nailist/internal/accounts"
@@ -56,20 +57,20 @@ func ValidateAuthConfig(cfg Config) error {
 	return nil
 }
 func (s *Server) authProviders(w http.ResponseWriter, r *http.Request) {
-	respond(w, 200, s.providers())
+	respond(w, r, 200, s.providers())
 }
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(userKey).(User)
 	if !ok {
-		respond(w, 200, nil)
+		respond(w, r, 200, nil)
 		return
 	}
 	identities, err := (accounts.Store{DB: s.db}).List(r.Context(), user.ID)
 	if err != nil {
-		failure(w, err)
+		failure(w, r, err)
 		return
 	}
-	respond(w, 200, struct {
+	respond(w, r, 200, struct {
 		User
 		Identities []accounts.Identity `json:"identities"`
 	}{user, identities})
@@ -124,13 +125,14 @@ func (s *Server) qqIdentity(ctx context.Context, code string) (accounts.Identity
 	}
 	var token struct {
 		AccessToken string `json:"access_token"`
+		Error       int    `json:"error"`
 	}
 	if json.Unmarshal(data, &token) != nil {
 		v, _ := url.ParseQuery(string(data))
 		token.AccessToken = v.Get("access_token")
 	}
 	if token.AccessToken == "" {
-		return identity, errors.New("QQ access token missing")
+		return identity, fmt.Errorf("QQ access token missing (provider_error=%d)", token.Error)
 	}
 	q = url.Values{"access_token": {token.AccessToken}, "fmt": {"json"}}
 	if s.cfg.QQUseUnionID {
@@ -141,12 +143,13 @@ func (s *Server) qqIdentity(ctx context.Context, code string) (accounts.Identity
 		return identity, err
 	}
 	var info struct {
+		Error    int    `json:"error"`
 		OpenID   string `json:"openid"`
 		ClientID string `json:"client_id"`
 		UnionID  string `json:"unionid"`
 	}
 	if json.Unmarshal(data, &info) != nil || info.OpenID == "" || info.ClientID != s.cfg.QQAppID || s.cfg.QQUseUnionID && info.UnionID == "" {
-		return identity, errors.New("QQ identity invalid")
+		return identity, fmt.Errorf("QQ identity invalid (provider_error=%d)", info.Error)
 	}
 	identity.Subject = info.OpenID
 	identity.UnionID = info.UnionID
@@ -161,7 +164,7 @@ func (s *Server) qqIdentity(ctx context.Context, code string) (accounts.Identity
 		SmallAvatar string `json:"figureurl_qq_1"`
 	}
 	if json.Unmarshal(data, &profile) != nil || profile.Ret != 0 || profile.Nickname == "" {
-		return identity, errors.New("QQ profile invalid")
+		return identity, fmt.Errorf("QQ profile invalid (provider_error=%d)", profile.Ret)
 	}
 	identity.Nickname = profile.Nickname
 	identity.AvatarURL = profile.Avatar

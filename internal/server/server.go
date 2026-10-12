@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"io"
-	"log"
 	"nailist/internal/groups"
 	"net/http"
 	"net/url"
@@ -54,8 +53,9 @@ func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
+	r.Use(logRequest)
+	r.Use(recoverRequest)
 	r.Use(middleware.Timeout(20 * time.Second))
 	r.Use(s.headers)
 	r.Use(s.session)
@@ -85,27 +85,30 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		if s.db != nil {
 			if err := s.db.Ping(r.Context()); err != nil {
-				respond(w, 503, map[string]string{"error": "数据库不可用"})
+				requestLogger(r).ErrorContext(r.Context(), "健康检查失败", "error", err)
+				respond(w, r, 503, map[string]string{"error": "数据库不可用"})
 				return
 			}
 		}
-		respond(w, 200, map[string]string{"status": "ok"})
+		respond(w, r, 200, map[string]string{"status": "ok"})
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			respond(w, 404, map[string]string{"error": "接口不存在"})
+			respond(w, r, 404, map[string]string{"error": "接口不存在"})
 			return
 		}
 		s.web.ServeHTTP(w, r)
 	})
 	return r
 }
-func respond(w http.ResponseWriter, status int, v any) {
+func respond(w http.ResponseWriter, r *http.Request, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		requestLogger(r).WarnContext(r.Context(), "写入响应失败", "error", err)
+	}
 }
-func failure(w http.ResponseWriter, err error) {
+func failure(w http.ResponseWriter, r *http.Request, err error) {
 	status := 500
 	msg := "服务暂不可用"
 	switch {
@@ -116,26 +119,26 @@ func failure(w http.ResponseWriter, err error) {
 		status = 409
 		msg = err.Error()
 	default:
-		log.Printf("request error: %v", err)
+		requestLogger(r).ErrorContext(r.Context(), "请求处理失败", "error", err)
 	}
-	respond(w, status, map[string]string{"error": msg})
+	respond(w, r, status, map[string]string{"error": msg})
 }
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	g, err := s.store.List(r.Context(), 0)
 	if err != nil {
-		failure(w, err)
+		failure(w, r, err)
 		return
 	}
-	respond(w, 200, g)
+	respond(w, r, 200, g)
 }
 func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value(userKey).(User)
 	g, err := s.store.List(r.Context(), u.ID)
 	if err != nil {
-		failure(w, err)
+		failure(w, r, err)
 		return
 	}
-	respond(w, 200, g)
+	respond(w, r, 200, g)
 }
 func groupID(r *http.Request) (int64, error) { return strconv.ParseInt(chi.URLParam(r, "id"), 10, 64) }
 func (s *Server) save(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +147,7 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 		var err error
 		id, err = groupID(r)
 		if err != nil || id < 1 {
-			respond(w, 400, map[string]string{"error": "无效群 ID"})
+			respond(w, r, 400, map[string]string{"error": "无效群 ID"})
 			return
 		}
 	}
@@ -153,47 +156,53 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&in); err != nil {
-		respond(w, 400, map[string]string{"error": "表单格式错误"})
+		respond(w, r, 400, map[string]string{"error": "表单格式错误"})
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		respond(w, 400, map[string]string{"error": "表单格式错误"})
+		respond(w, r, 400, map[string]string{"error": "表单格式错误"})
 		return
 	}
 	g, err := groups.Normalize(in)
 	if err != nil {
-		respond(w, 400, map[string]string{"error": err.Error()})
+		respond(w, r, 400, map[string]string{"error": err.Error()})
 		return
 	}
 	u := r.Context().Value(userKey).(User)
 	g, err = s.store.Save(r.Context(), u.ID, id, g)
 	if err != nil {
-		failure(w, err)
+		failure(w, r, err)
 		return
 	}
 	status := 200
 	if id == 0 {
 		status = 201
 	}
-	respond(w, status, g)
+	action := "更新奶群"
+	if id == 0 {
+		action = "创建奶群"
+	}
+	requestLogger(r).InfoContext(r.Context(), action, "group_id", g.ID)
+	respond(w, r, status, g)
 }
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 	id, err := groupID(r)
 	if err != nil || id < 1 {
-		respond(w, 400, map[string]string{"error": "无效群 ID"})
+		respond(w, r, 400, map[string]string{"error": "无效群 ID"})
 		return
 	}
 	u := r.Context().Value(userKey).(User)
 	if err := s.store.Delete(r.Context(), u.ID, id); err != nil {
-		failure(w, err)
+		failure(w, r, err)
 		return
 	}
+	requestLogger(r).InfoContext(r.Context(), "删除奶群", "group_id", id)
 	w.WriteHeader(204)
 }
 func (s *Server) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := r.Context().Value(userKey).(User); !ok {
-			respond(w, 401, map[string]string{"error": "请先登录"})
+			respond(w, r, 401, map[string]string{"error": "请先登录"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -205,7 +214,7 @@ func (s *Server) protectWrite(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		expected, _ := url.Parse(s.cfg.PublicURL)
 		if (origin != "" && origin != expected.Scheme+"://"+expected.Host) || r.Header.Get("Sec-Fetch-Site") == "cross-site" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(u.CSRF)) != 1 {
-			respond(w, 403, map[string]string{"error": "登录校验失败，请刷新"})
+			respond(w, r, 403, map[string]string{"error": "登录校验失败，请刷新"})
 			return
 		}
 		next.ServeHTTP(w, r)

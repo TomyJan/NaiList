@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
 	"strings"
@@ -31,6 +33,10 @@ func (s *Server) session(next http.Handler) http.Handler {
 				err = s.db.QueryRow(r.Context(), `SELECT u.id,u.nickname,u.avatar_url,s.csrf_token FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, hashToken(c.Value)).Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.CSRF)
 				if err == nil {
 					r = r.WithContext(context.WithValue(r.Context(), userKey, u))
+				} else if errors.Is(err, pgx.ErrNoRows) {
+					requestLogger(r).DebugContext(r.Context(), "会话不存在或已过期")
+				} else {
+					requestLogger(r).ErrorContext(r.Context(), "读取会话失败", "error", err)
 				}
 			}
 		}
@@ -48,17 +54,18 @@ func (s *Server) qqGet(ctx context.Context, address string) ([]byte, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("QQ request failed")
+		return nil, fmt.Errorf("QQ 请求 %s 失败: HTTP %d", req.URL.Path, res.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(res.Body, 1024*1024))
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("nailist_session"); err == nil && s.db != nil {
 		if _, err := s.db.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hashToken(c.Value)); err != nil {
-			failure(w, err)
+			failure(w, r, err)
 			return
 		}
 	}
+	requestLogger(r).InfoContext(r.Context(), "退出登录")
 	s.cookie(w, "nailist_session", "", -1)
 	w.WriteHeader(204)
 }
