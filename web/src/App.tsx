@@ -55,6 +55,10 @@ export default function App() {
     window.addEventListener("popstate", listener);
     return () => window.removeEventListener("popstate", listener);
   }, []);
+  // 供 CSS 区分页面：主页显示奶蛙背景，管理页不显示。
+  useEffect(() => {
+    document.documentElement.dataset.page = manage ? "manage" : "home";
+  }, [manage]);
   useEffect(() => {
     const controller = new AbortController();
     api<User | null>("/api/me", { signal: controller.signal })
