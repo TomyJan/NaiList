@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, LogIn, ShieldCheck, X } from "lucide-react";
-import { api, writeOptions } from "./api";
+import { api, ApiError, writeOptions } from "./api";
 import { notify } from "./notifications";
 import type { LoginProvider, User } from "./types";
 
@@ -85,10 +85,12 @@ export function AccountBindings({
   user,
   providers,
   onRetry,
+  onSessionExpired,
 }: {
   user: User;
   onRetry: () => Promise<void>;
   providers: LoginProvider[] | null | undefined;
+  onSessionExpired: () => Promise<void>;
 }) {
   const [pending, setPending] = useState<LoginProvider | null>(null);
   const [busy, setBusy] = useState(false);
@@ -121,6 +123,10 @@ export function AccountBindings({
       location.assign(result.url);
     } catch (error) {
       notify.error((error as Error).message);
+      if (error instanceof ApiError && error.status === 401) {
+        await onSessionExpired();
+        return;
+      }
       setBusy(false);
     }
   };
@@ -131,7 +137,7 @@ export function AccountBindings({
           <ShieldCheck size={18} />
           账号绑定
         </h2>
-        <span>绑定后不可解绑</span>
+        <span>账号 ID：{user.id}</span>
       </div>
       {providers === null && (
         <button className="secondary" onClick={onRetry}>

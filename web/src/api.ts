@@ -1,3 +1,12 @@
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -8,7 +17,7 @@ export async function api<T>(
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "请求失败" }));
-    throw new Error(error.error || "请求失败");
+    throw new ApiError(error.error || "请求失败", response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

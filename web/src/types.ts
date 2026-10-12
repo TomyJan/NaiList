@@ -12,6 +12,17 @@ export interface User {
   avatarUrl: string;
   csrfToken: string;
   identities: LoginIdentity[];
+  isAdmin?: boolean;
+}
+export interface AdminUser {
+  id: number;
+  nickname: string;
+  avatarUrl: string;
+  groupCount: number;
+  identities: LoginIdentity[];
+}
+export interface AdminGroup extends Group {
+  ownerId: number;
 }
 export interface LoginIdentity {
   providerId: string;

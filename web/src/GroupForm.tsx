@@ -5,38 +5,56 @@ import {
   initialGroupInput,
   validateGroupInput,
 } from "./group-input";
-import { readGroupDraft, writeGroupDraft } from "./group-drafts";
+import {
+  readGroupDraft,
+  writeGroupDraft,
+  type GroupDraft,
+} from "./group-drafts";
 import { notify } from "./notifications";
-import type { Group, GroupInput } from "./types";
+import type { AdminUser, Group, GroupInput } from "./types";
 
 export function GroupForm({
   accountID,
   group,
   onClose,
   onSave,
+  ownership,
 }: {
   accountID: number;
   group: Group | null;
   onClose: () => void;
-  onSave: (input: GroupInput) => Promise<void>;
+  onSave: (input: GroupInput, ownerId?: number) => Promise<void>;
+  ownership?: { users: AdminUser[]; ownerId: number };
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const qrGeneration = useRef(0);
-  const [original] = useState(() => initialGroupInput(group));
-  const [input, setInput] = useState<GroupInput>(
-    () => readGroupDraft(accountID, group?.id) ?? original,
+  const mounted = useRef(false);
+  const scope = ownership ? "admin" : "personal";
+  const [original] = useState<GroupDraft>(() => ({
+    ...initialGroupInput(group),
+    ...(ownership ? { ownerId: ownership.ownerId } : {}),
+  }));
+  const [input, setInput] = useState<GroupDraft>(() => ({
+    ...original,
+    ...readGroupDraft(accountID, group?.id, scope),
+  }));
+  const [ownerQuery, setOwnerQuery] = useState("");
+  const selectedOwner = ownership?.users.find(
+    (owner) => owner.id === input.ownerId,
   );
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
   useEffect(() => {
-    writeGroupDraft(accountID, group?.id, input);
-  }, [accountID, group?.id, input]);
+    writeGroupDraft(accountID, group?.id, input, scope);
+  }, [accountID, group?.id, input, scope]);
   useEffect(() => {
     const dialog = ref.current!;
+    mounted.current = true;
     dialog.showModal();
     return () => {
       qrGeneration.current++;
+      mounted.current = false;
       dialog.close();
     };
   }, []);
@@ -90,13 +108,18 @@ export function GroupForm({
             notify.error(validationError);
             return;
           }
+          if (ownership && !selectedOwner) {
+            notify.error("请选择有效的所属账号");
+            return;
+          }
           setBusy(true);
           try {
-            await onSave(input);
+            const { ownerId, ...fields } = input;
+            await onSave(fields, ownerId);
           } catch (error) {
-            notify.error((error as Error).message);
+            if (mounted.current) notify.error((error as Error).message);
           } finally {
-            setBusy(false);
+            if (mounted.current) setBusy(false);
           }
         }}
       >
@@ -192,6 +215,54 @@ export function GroupForm({
             }}
           />
         </div>
+        {ownership && (
+          <fieldset className="owner-picker" disabled={busy}>
+            <legend>所属账号</legend>
+            <p className="owner-selected">
+              当前选择：
+              {selectedOwner
+                ? `${selectedOwner.nickname}（ID：${selectedOwner.id}）`
+                : `账号不可用（ID：${input.ownerId}），请重新选择`}
+            </p>
+            <input
+              aria-label="搜索所属账号"
+              placeholder="搜索昵称或账号 ID"
+              value={ownerQuery}
+              onChange={(e) => setOwnerQuery(e.target.value)}
+            />
+            <div className="owner-options" aria-label="所属账号选项">
+              {ownership.users
+                .filter((owner) =>
+                  `${owner.nickname} ${owner.id}`
+                    .toLocaleLowerCase()
+                    .includes(ownerQuery.trim().toLocaleLowerCase()),
+                )
+                .map((owner) => (
+                  <button
+                    type="button"
+                    key={owner.id}
+                    className={
+                      owner.id === input.ownerId
+                        ? "owner-option selected"
+                        : "owner-option"
+                    }
+                    aria-label={`选择 ${owner.nickname}（ID：${owner.id}）`}
+                    aria-pressed={owner.id === input.ownerId}
+                    onClick={() =>
+                      setInput((current) => ({ ...current, ownerId: owner.id }))
+                    }
+                  >
+                    {owner.nickname}（ID：{owner.id}）
+                  </button>
+                ))}
+              {!ownership.users.some((owner) =>
+                `${owner.nickname} ${owner.id}`
+                  .toLocaleLowerCase()
+                  .includes(ownerQuery.trim().toLocaleLowerCase()),
+              ) && <p>没有匹配的账号</p>}
+            </div>
+          </fieldset>
+        )}
         <div className="modal-actions">
           <button
             type="button"
@@ -201,6 +272,7 @@ export function GroupForm({
               qrGeneration.current++;
               setReading(false);
               setInput({ ...original });
+              setOwnerQuery("");
             }}
           >
             <Undo2 size={16} />

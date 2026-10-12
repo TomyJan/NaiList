@@ -1,15 +1,21 @@
 import type { GroupInput } from "./types";
 
-const memory = new Map<string, GroupInput>();
-const prefix = (account: number) => `nailist:draft:${account}:`;
-const key = (account: number, group?: number) =>
-  `${prefix(account)}${group ?? "new"}`;
+export type GroupDraft = GroupInput & { ownerId?: number };
+export type DraftScope = "personal" | "admin";
+const memory = new Map<string, GroupDraft>();
+const prefix = (account: number, scope: DraftScope = "personal") =>
+  scope === "admin"
+    ? `nailist:admin-draft:${account}:`
+    : `nailist:draft:${account}:`;
+const key = (account: number, group?: number, scope: DraftScope = "personal") =>
+  `${prefix(account, scope)}${group ?? "new"}`;
 
 export function readGroupDraft(
   account: number,
   group?: number,
-): GroupInput | undefined {
-  const draftKey = key(account, group);
+  scope: DraftScope = "personal",
+): GroupDraft | undefined {
+  const draftKey = key(account, group, scope);
   if (memory.has(draftKey)) return memory.get(draftKey);
   try {
     const stored: unknown = JSON.parse(
@@ -23,7 +29,7 @@ export function readGroupDraft(
           typeof (stored as Record<string, unknown>)[field] === "string",
       )
     )
-      return stored as GroupInput;
+      return stored as GroupDraft;
   } catch {
     /* Keep editing when browser storage is unavailable. */
   }
@@ -32,9 +38,10 @@ export function readGroupDraft(
 export function writeGroupDraft(
   account: number,
   group: number | undefined,
-  input: GroupInput,
+  input: GroupDraft,
+  scope: DraftScope = "personal",
 ) {
-  const draftKey = key(account, group);
+  const draftKey = key(account, group, scope);
   memory.set(draftKey, input);
   try {
     sessionStorage.setItem(draftKey, JSON.stringify(input));
@@ -43,8 +50,12 @@ export function writeGroupDraft(
   }
 }
 
-export function clearGroupDraft(account: number, group?: number) {
-  const draftKey = key(account, group);
+export function clearGroupDraft(
+  account: number,
+  group?: number,
+  scope: DraftScope = "personal",
+) {
+  const draftKey = key(account, group, scope);
   memory.delete(draftKey);
   try {
     sessionStorage.removeItem(draftKey);
@@ -54,12 +65,14 @@ export function clearGroupDraft(account: number, group?: number) {
 }
 
 export function clearAccountDrafts(account: number) {
+  const belongsToAccount = (draftKey: string) =>
+    draftKey.startsWith(prefix(account)) ||
+    draftKey.startsWith(prefix(account, "admin"));
   for (const draftKey of memory.keys())
-    if (draftKey.startsWith(prefix(account))) memory.delete(draftKey);
+    if (belongsToAccount(draftKey)) memory.delete(draftKey);
   try {
     for (const draftKey of Object.keys(sessionStorage))
-      if (draftKey.startsWith(prefix(account)))
-        sessionStorage.removeItem(draftKey);
+      if (belongsToAccount(draftKey)) sessionStorage.removeItem(draftKey);
   } catch {
     /* Storage may be disabled. */
   }
