@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"nailist/internal/groups"
@@ -24,6 +25,10 @@ func env(k, fallback string) string {
 	return fallback
 }
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println("nailist " + Version)
+		return
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	publicURL := strings.TrimRight(env("PUBLIC_URL", "http://localhost:8080"), "/")
@@ -52,7 +57,7 @@ func main() {
 		defer cancel()
 		_ = httpServer.Shutdown(shutdown)
 	}()
-	log.Printf("奶龙群列表：%s", publicURL)
+	log.Printf("奶龙群列表 v%s：%s", Version, publicURL)
 	if err = httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

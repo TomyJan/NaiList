@@ -9,6 +9,11 @@ on:
         type: string
         required: false
         default: ""
+      ref:
+        description: Commit to build and test
+        type: string
+        required: false
+        default: ""
   push:
     branches: [master, main]
   pull_request:
@@ -42,6 +47,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -68,6 +74,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: web/package.json
@@ -82,7 +89,7 @@ jobs:
           pnpm exec prettier --check src e2e '*.ts' package.json tsconfig.json index.html
           pnpm exec tsc --noEmit
       - name: Release version tests
-        run: node --test ../scripts/release-version.test.mjs
+        run: node --test ../scripts/*.test.mjs
       - run: pnpm test
       - run: pnpm run build
       - uses: actions/upload-artifact@v7
@@ -116,6 +123,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -176,6 +184,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -223,6 +232,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
       - name: Validate deployment configuration
         env:
           POSTGRES_PASSWORD: ci-test-password
