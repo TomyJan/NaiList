@@ -86,6 +86,8 @@ Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `maste
 
 检查全部通过后，发布 Linux x64 裸二进制 `nailist-X.Y.Z-linux-amd64` 及 `SHA256SUMS.txt`，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外 Secret。仓库/组织需允许 Actions 及 `packages: write` 权限；镜像公开下载需将 GHCR 包设为公开。可通过 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
 
+发布任务需要 `contents: write`（工作流已配置）。Release 仅使用准备阶段已推送且指向发布提交的标签，避免发布时临时给旧提交创建标签触发权限限制。若旧版本工作流报 403，推送最新代码后重新 **Run workflow**；旧运行的 **Re-run jobs** 仍使用旧工作流。
+
 后端版本可执行 `./nailist --version` 查看，前端版本写入页面 `<html data-version="X.Y.Z">`。
 
 ## 登录方式与账号绑定

@@ -132,13 +132,13 @@ jobs:
         shell: bash
         run: |
           sha256sum nailist-* > SHA256SUMS.txt
+          existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          if [ "$existing_sha" != "$RELEASE_SHA" ]; then
+            echo 'Release tag does not point to the prepared commit.' >&2
+            exit 1
+          fi
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
-            if [ "$existing_sha" != "$RELEASE_SHA" ]; then
-              echo 'Existing tag points to another commit.' >&2
-              exit 1
-            fi
             gh release upload "$RELEASE_TAG" ./* --clobber
           else
-            gh release create "$RELEASE_TAG" ./* --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes --latest
+            gh release create "$RELEASE_TAG" ./* --verify-tag --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes --latest
           fi
