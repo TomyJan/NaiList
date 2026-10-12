@@ -50,6 +50,7 @@ func TestPostgresQQCallbackAndExpiredSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	openid := randomToken()
+	var accountID int64
 	calls := 0
 	s := New(Config{PublicURL: "https://groups.example", QQAppID: "app", QQAppKey: "key"}, db, groups.Store{DB: db})
 	s.client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -71,8 +72,8 @@ func TestPostgresQQCallbackAndExpiredSession(t *testing.T) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
 	})}
 	defer func() {
-		_, _ = db.Exec(ctx, `DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE qq_openid=$1)`, openid)
-		_, _ = db.Exec(ctx, `DELETE FROM users WHERE qq_openid=$1`, openid)
+		_, _ = db.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, accountID)
+		_, _ = db.Exec(ctx, `DELETE FROM users WHERE id=$1`, accountID)
 	}()
 	bad := httptest.NewRequest("GET", "/auth/qq/callback?state=wrong&code=code", nil)
 	bad.AddCookie(&http.Cookie{Name: "qq_state", Value: "right"})
@@ -81,12 +82,20 @@ func TestPostgresQQCallbackAndExpiredSession(t *testing.T) {
 	if calls != 0 || !strings.Contains(w.Header().Get("Location"), "auth_error") {
 		t.Fatal("bad OAuth state accepted")
 	}
-	r := httptest.NewRequest("GET", "/auth/qq/callback?state=right&code=code", nil)
-	r.AddCookie(&http.Cookie{Name: "qq_state", Value: "right"})
+	start := httptest.NewRecorder()
+	s.Routes().ServeHTTP(start, httptest.NewRequest("GET", "/auth/qq", nil))
+	location, _ := url.Parse(start.Header().Get("Location"))
+	r := httptest.NewRequest("GET", "/auth/qq/callback?state="+location.Query().Get("state")+"&code=code", nil)
+	for _, cookie := range start.Result().Cookies() {
+		r.AddCookie(cookie)
+	}
 	w = httptest.NewRecorder()
 	s.Routes().ServeHTTP(w, r)
 	if w.Code != 303 || w.Header().Get("Location") != "/" || calls != 3 {
 		t.Fatalf("callback failed: %d %s", w.Code, w.Header().Get("Location"))
+	}
+	if err := db.QueryRow(ctx, `SELECT user_id FROM identities WHERE subject=$1`, openid).Scan(&accountID); err != nil {
+		t.Fatal(err)
 	}
 	var session *http.Cookie
 	for _, cookie := range w.Result().Cookies() {

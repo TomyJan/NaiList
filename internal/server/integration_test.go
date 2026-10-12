@@ -29,10 +29,10 @@ func TestPostgresCRUDSessionsAndOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	var owner, other int64
-	if err := db.QueryRow(ctx, `INSERT INTO users(qq_openid,nickname) VALUES($1,'test') RETURNING id`, randomToken()).Scan(&owner); err != nil {
+	if err := db.QueryRow(ctx, `INSERT INTO users(nickname) VALUES('test') RETURNING id`).Scan(&owner); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(ctx, `INSERT INTO users(qq_openid,nickname) VALUES($1,'other') RETURNING id`, randomToken()).Scan(&other); err != nil {
+	if err := db.QueryRow(ctx, `INSERT INTO users(nickname) VALUES('other') RETURNING id`).Scan(&other); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {

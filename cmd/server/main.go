@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -49,7 +50,17 @@ func main() {
 	if err = migrate(startup, db); err != nil {
 		log.Fatal("迁移失败：", err)
 	}
-	s := server.New(server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY"), WebDir: env("WEB_DIR", "web/dist")}, db, groups.Store{DB: db})
+	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY"), WebDir: env("WEB_DIR", "web/dist")}
+	unionID, err := strconv.ParseBool(env("QQ_USE_UNIONID", "false"))
+	if err != nil {
+		log.Fatal("QQ_USE_UNIONID 必须为 true 或 false")
+	}
+	cfg.QQUseUnionID = unionID
+	cfg.OIDC = server.OIDCConfig{ID: os.Getenv("OIDC_ID"), Name: os.Getenv("OIDC_NAME"), Icon: os.Getenv("OIDC_ICON"), Issuer: os.Getenv("OIDC_ISSUER"), ClientID: os.Getenv("OIDC_CLIENT_ID"), ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"), Scopes: os.Getenv("OIDC_SCOPES")}
+	if err = server.ValidateAuthConfig(cfg); err != nil {
+		log.Fatal(err)
+	}
+	s := server.New(cfg, db, groups.Store{DB: db})
 	httpServer := &http.Server{Addr: env("LISTEN_ADDR", ":8080"), Handler: s.Routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()

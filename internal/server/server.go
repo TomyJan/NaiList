@@ -18,7 +18,11 @@ import (
 	"time"
 )
 
-type Config struct{ PublicURL, QQAppID, QQAppKey, WebDir string }
+type Config struct {
+	PublicURL, QQAppID, QQAppKey, WebDir string
+	QQUseUnionID                         bool
+	OIDC                                 OIDCConfig
+}
 type User struct {
 	ID        int64  `json:"id"`
 	Nickname  string `json:"nickname"`
@@ -52,14 +56,8 @@ func (s *Server) Routes() http.Handler {
 	r.Use(s.headers)
 	r.Use(s.session)
 	r.Get("/api/groups", s.list)
-	r.Get("/api/me", func(w http.ResponseWriter, r *http.Request) {
-		u, ok := r.Context().Value(userKey).(User)
-		if !ok {
-			respond(w, 200, nil)
-			return
-		}
-		respond(w, 200, u)
-	})
+	r.Get("/api/me", s.me)
+	r.Get("/api/auth/providers", s.authProviders)
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)
@@ -70,12 +68,15 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/api/groups/{id}", s.save)
 			r.Delete("/api/groups/{id}", s.remove)
 			r.Post("/api/auth/logout", s.logout)
+			r.Post("/api/auth/bind/{provider}", s.bind)
 		})
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Throttle(16))
 		r.Get("/auth/qq", s.login)
 		r.Get("/auth/qq/callback", s.callback)
+		r.Get("/auth/{provider}", s.providerLogin)
+		r.Get("/auth/{provider}/callback", s.providerCallback)
 	})
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		if s.db != nil {

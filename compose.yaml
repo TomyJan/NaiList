@@ -24,6 +24,14 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:?请在 .env 中设置站点 HTTPS 根地址}
       QQ_APP_ID: ${QQ_APP_ID:-}
       QQ_APP_KEY: ${QQ_APP_KEY:-}
+      QQ_USE_UNIONID: ${QQ_USE_UNIONID:-false}
+      OIDC_ID: ${OIDC_ID:-}
+      OIDC_NAME: ${OIDC_NAME:-}
+      OIDC_ICON: ${OIDC_ICON:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     depends_on:

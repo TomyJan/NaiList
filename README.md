@@ -33,7 +33,7 @@ location / {
 }
 ```
 
-在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。未配置 QQ 凭据时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose up -d --build`。备份：`docker compose exec -T db pg_dump -U nailist nailist > backup.sql`。恢复：`docker compose exec -T db psql -U nailist nailist < backup.sql`（恢复到空数据库）。
+在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose up -d --build`。备份：`docker compose exec -T db pg_dump -U nailist nailist > backup.sql`。恢复：`docker compose exec -T db psql -U nailist nailist < backup.sql`（恢复到空数据库）。
 
 ## 本地开发
 
@@ -69,3 +69,25 @@ Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `maste
 使用二进制包时，解压后设置 `DATABASE_URL`、`PUBLIC_URL` 和 QQ 环境变量，在解压目录运行 `./nailist`（Windows 为 `nailist.exe`），或通过 `WEB_DIR` 指定解压后的 `web/dist`。
 
 后端版本可执行 `./nailist --version` 查看，前端版本写入页面 `<html data-version="X.Y.Z">`。
+
+## 登录方式与账号绑定
+
+账号独立于登录方式，支持 QQ 和一个 OIDC。同一账号可各绑定一个身份，管理页顶部可发起绑定；绑定后不支持解绑。身份被其他账号使用时拒绝绑定，不按邮箱/昵称自动合并账号。若已分别登录创建两个账号，也不能互相绑定；请先登录原账号再绑定新方式。
+
+QQ 配置 `QQ_APP_ID`、`QQ_APP_KEY`，回调为 `/auth/qq/callback`。`QQ_USE_UNIONID=false` 默认使用应用内 OpenID；设为 `true` 会请求并使用 UnionID，需要 QQ 互联应用具有相应权限，未返回 UnionID 时拒绝登录。启用时先用原 QQ 应用登录一次，系统会补充 UnionID 并保留原账号；更换 App ID 前须完成此步骤。已保存的 UnionID 不会被配置切换删除。
+
+OIDC 示例（省略则不启用）：
+
+```env
+OIDC_ID=campus
+OIDC_NAME=校园账号
+OIDC_ICON=https://id.example.com/icon.png
+OIDC_ISSUER=https://id.example.com
+OIDC_CLIENT_ID=nailist
+OIDC_CLIENT_SECRET=应用密钥
+OIDC_SCOPES=
+```
+
+`OIDC_ID` 是稳定的小写登录方式标识，不能为 `qq`；客户端 ID 是独立的 `OIDC_CLIENT_ID`。名称必填，图标可选（HTTPS URL 或站内路径）。Issuer 需为 HTTPS，支持标准 OIDC discovery、授权码模式及 PKCE S256；注册精确回调 `https://群列表域名/auth/campus/callback`（campus 替换为实际 ID）。密钥对公开客户端可留空，默认请求 `openid profile`，额外 scope 用空格分隔。验证 ID Token 签名、issuer、audience、过期时间和 nonce，使用 issuer + sub 识别身份，密钥和 token 不返回前端。
+
+部署升级自动将旧 QQ 账号迁移到身份表，保留账号 ID、群归属和现有会话。首次登录原 QQ 应用会补齐身份所属应用。已有绑定后不要改 OIDC_ID / OIDC_ISSUER；显示名称和图标可调整。迁移前按部署章节备份数据库。
