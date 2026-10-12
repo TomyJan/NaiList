@@ -37,6 +37,9 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await expect(page.locator("article")).toHaveCount(3);
+  await expect(
+    page.locator("header").getByRole("link", { name: "首页", exact: true }),
+  ).toHaveCount(0);
   const boxes = await page.locator("article").evaluateAll((rows) =>
     rows.map((row) => ({
       x: row.getBoundingClientRect().x,
@@ -125,6 +128,9 @@ test("管理页添加、编辑、删除、退出", async ({ page }) => {
   await page.getByRole("button", { name: "账户菜单" }).click();
   await page.getByRole("menuitem", { name: "管理奶群" }).click();
   await expect(page.getByRole("heading", { name: "管理奶群." })).toBeVisible();
+  await expect(
+    page.locator("header").getByRole("link", { name: "首页", exact: true }),
+  ).toBeVisible();
   await expect(page.locator("article")).toHaveCount(3);
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
@@ -178,6 +184,71 @@ test("失败可重试，空搜索提示", async ({ page }) => {
   await expect(page.locator("article")).toHaveCount(3);
   await page.getByRole("textbox", { name: "搜索奶群" }).fill("不存在");
   await expect(page.getByText("没有匹配的奶群")).toBeVisible();
+});
+
+test("添加和编辑重复群号显示提示，保留输入并允许修正", async ({ page }) => {
+  let data = [structuredClone(seed[0])];
+  const duplicateMessage = "此群号已存在, 请前往首页搜索查看";
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/me")
+      return route.fulfill({
+        json: {
+          id: 1,
+          nickname: "测试用户",
+          avatarUrl: "",
+          csrfToken: "csrf",
+          identities: [],
+        },
+      });
+    if (path === "/api/auth/providers") return route.fulfill({ json: [] });
+    if (request.method() === "GET") return route.fulfill({ json: data });
+    const input = request.postDataJSON();
+    if (input.qqNumber === seed[1].qqNumber)
+      return route.fulfill({ status: 409, json: { error: duplicateMessage } });
+    const saved = {
+      ...input,
+      id: request.method() === "POST" ? 4 : 1,
+      keywords: [],
+      updatedAt: "",
+    };
+    if (request.method() === "POST") data.push(saved);
+    else data = data.map((group) => (group.id === saved.id ? saved : group));
+    return route.fulfill({ json: saved });
+  });
+  await page.goto("/manage");
+  for (const mode of ["添加", "编辑"]) {
+    await page
+      .getByRole("button", {
+        name: mode === "添加" ? "添加奶群" : `编辑 ${seed[0].organization}`,
+      })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByLabel("学校 / 单位")
+      .fill(mode === "添加" ? "新学校" : seed[0].organization);
+    await dialog.getByLabel("群号", { exact: true }).fill(seed[1].qqNumber);
+    await dialog.getByLabel("群链接").fill("https://qm.qq.com/q/test");
+    await dialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toHaveText(duplicateMessage);
+    await expect(dialog.getByLabel("群号", { exact: true })).toHaveValue(
+      seed[1].qqNumber,
+    );
+    await dialog
+      .getByLabel("群号", { exact: true })
+      .fill(mode === "添加" ? "987654321" : seed[0].qqNumber);
+    await dialog.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  }
+  await page
+    .locator("header")
+    .getByRole("link", { name: "首页", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.locator("header").getByRole("link", { name: "首页", exact: true }),
+  ).toHaveCount(0);
 });
 
 const loginProviders = [

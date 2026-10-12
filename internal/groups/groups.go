@@ -28,7 +28,7 @@ type Input struct {
 
 var numberPattern = regexp.MustCompile(`^[1-9][0-9]{4,11}$`)
 var ErrNotFound = errors.New("群不存在或无权操作")
-var ErrDuplicate = errors.New("该群号已收录")
+var ErrDuplicate = errors.New("此群号已存在, 请前往首页搜索查看")
 
 func Normalize(in Input) (Group, error) {
 	g := Group{Organization: strings.TrimSpace(in.Organization), QQNumber: strings.TrimSpace(in.QQNumber), JoinURL: strings.TrimSpace(in.JoinURL), Keywords: []string{}}

@@ -83,8 +83,30 @@ func TestPostgresCRUDSessionsAndOwnership(t *testing.T) {
 			t.Fatalf("ownership %s %d", method, w.Code)
 		}
 	}
-	if w = request("POST", "/api/groups", body, token); w.Code != 409 {
-		t.Fatal("duplicate accepted")
+	assertDuplicate := func(w *httptest.ResponseRecorder) {
+		t.Helper()
+		var response struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != 409 || response.Error != "此群号已存在, 请前往首页搜索查看" {
+			t.Fatalf("duplicate response: %d %s", w.Code, w.Body.String())
+		}
+	}
+	for _, duplicateToken := range []string{token, otherToken} {
+		assertDuplicate(request("POST", "/api/groups", body, duplicateToken))
+	}
+	otherNumber := strconv.FormatInt(800000000+other, 10)
+	otherBody := strings.Replace(body, number, otherNumber, 1)
+	if w = request("POST", "/api/groups", otherBody, otherToken); w.Code != 201 {
+		t.Fatalf("create other group: %d %s", w.Code, w.Body.String())
+	}
+	assertDuplicate(request("PUT", path, otherBody, token))
+	var storedNumber string
+	if err := db.QueryRow(ctx, `SELECT qq_number FROM groups WHERE id=$1`, g.ID).Scan(&storedNumber); err != nil || storedNumber != number {
+		t.Fatal("duplicate edit changed the original group")
 	}
 	if w = request("PUT", path, strings.Replace(body, "烂梨", "新简称", 1), token); w.Code != 200 {
 		t.Fatalf("edit %d", w.Code)

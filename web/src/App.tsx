@@ -187,16 +187,18 @@ export default function App() {
             <span>NaiList</span>
           </a>
           <div className="nav-right">
-            <a
-              className={"nav-link " + (!manage ? "active" : "")}
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                navigate("/");
-              }}
-            >
-              首页
-            </a>
+            {path !== "/" && (
+              <a
+                className="nav-link"
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate("/");
+                }}
+              >
+                首页
+              </a>
+            )}
             {user ? (
               <div ref={menuRef} className="profile">
                 <button
