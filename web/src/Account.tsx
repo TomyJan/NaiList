@@ -4,10 +4,14 @@ import { api, writeOptions } from "./api";
 import type { LoginProvider, User } from "./types";
 
 function ProviderIcon({ provider }: { provider: LoginProvider }) {
-  return provider.icon ? (
+  const icon =
+    provider.id === "qq"
+      ? "https://static-res.qq.com/static-res/imqq/qq-logo.png"
+      : provider.icon;
+  return icon ? (
     <img
       className="provider-icon"
-      src={provider.icon}
+      src={icon}
       alt=""
       referrerPolicy="no-referrer"
       onError={(event) => {
