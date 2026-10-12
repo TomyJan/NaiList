@@ -104,7 +104,7 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 添加、编辑弹窗自动保留当前标签页的草稿，关闭、取消或刷新后可恢复；草稿按账号和奶群隔离，成功保存、删除或退出登录后清理。「撤销」将添加表单清空，或将编辑表单恢复到打开时的原值，操作不会写入服务器。
 
-群链接支持粘贴 QQ 分享文本自动提取，或通过「从二维码解析」选择图片（不超过 10 MB）。二维码仅在浏览器处理，图片不会上传；识别失败保留原链接，解码库按需加载。
+群链接支持粘贴 QQ 分享文本自动提取，或通过「从二维码解析」选择图片（不超过 10 MB）。使用 ZXing 支持彩色、反色、圆点等样式二维码，仅在浏览器处理，图片不会上传；识别失败保留原链接，并建议上传 QQ 默认样式的二维码。解码库及 WASM 按需加载，随应用内嵌，无需外部解码服务。
 
 前后端均校验：学校/单位必填且最多 32 字，关键词最多 128 字（包含分隔符），群号为 5～11 位数字。群链接支持 `https://qm.qq.com/q/` 加有效短码，以及带查询参数的旧版 `https://qun.qq.com/universal-share/share?…` 链接，最多 2048 字符；粘贴、二维码识别和保存均完整保留原链接参数。文字长度按 Unicode 字符计算，支持表情。
 
@@ -119,6 +119,8 @@ cd web && pnpm test && pnpm run build
 ```
 
 数据库集成测试可设置专用测试库 `TEST_DATABASE_URL` 后运行 `go test ./internal/server -run TestPostgres -v`。浏览器测试需运行服务并安装 Chrome，设置 `TEST_APP_URL=http://localhost:8080` 后，在 `web` 目录执行 `pnpm run test:e2e`。
+
+浏览器测试包含彩色圆点二维码回归用例。设置测试变量 `QQ_QR_SAMPLE` 为本地 QQ 原图路径，可额外运行实图用例（预期链接 `https://qm.qq.com/q/lnNAZvuNKS`）；原图无需提交到仓库。
 
 ## 自动检查与发版
 

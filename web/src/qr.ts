@@ -1,5 +1,11 @@
-import jsQR from "jsqr";
+import { prepareZXingModule, readBarcodes } from "zxing-wasm/reader";
+import wasmURL from "zxing-wasm/reader/zxing_reader.wasm?url";
 import { extractJoinLink } from "./group-input";
+
+// Bundle WASM with the application; decoding never depends on an external CDN.
+prepareZXingModule({
+  overrides: { locateFile: () => wasmURL },
+});
 
 export async function decodeGroupQRCode(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error("请选择二维码图片");
@@ -22,13 +28,22 @@ export async function decodeGroupQRCode(file: File): Promise<string> {
     if (!context) throw new Error("浏览器无法读取图片");
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    const result = jsQR(pixels.data, pixels.width, pixels.height, {
-      inversionAttempts: "attemptBoth",
+    const results = await readBarcodes(pixels, {
+      formats: ["QRCode"],
+      tryHarder: true,
+      tryRotate: true,
+      tryInvert: true,
+      tryDenoise: true,
     });
-    if (!result) throw new Error("未识别到二维码，请选择清晰的二维码图片");
-    const link = extractJoinLink(result.data);
-    if (!link || link.length > 2048)
-      throw new Error("二维码中没有有效 QQ 群链接");
+    if (!results.length)
+      throw new Error("未识别到二维码，建议上传 QQ 默认样式的二维码");
+    const link = results
+      .map((result) => extractJoinLink(result.text))
+      .find((link) => link && link.length <= 2048);
+    if (!link)
+      throw new Error(
+        "二维码中没有有效 QQ 群链接，建议上传 QQ 默认样式的二维码",
+      );
     return link;
   } finally {
     URL.revokeObjectURL(objectURL);

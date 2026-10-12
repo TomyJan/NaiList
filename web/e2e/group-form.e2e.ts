@@ -200,6 +200,9 @@ test("粘贴分享文本、浏览器解析二维码及失败保留链接", async
       fileURLToPath(new URL("../public/nailong.png", import.meta.url)),
     );
   await expect(page.getByRole("alert").last()).toContainText("未识别到二维码");
+  await expect(page.getByRole("alert").last()).toContainText(
+    "建议上传 QQ 默认样式的二维码",
+  );
   await expect(link).toHaveValue("https://qm.qq.com/q/AjLVv044nu");
   await page
     .locator('input[type="file"]')
@@ -277,6 +280,49 @@ test("旧版分享链接粘贴、二维码、添加与编辑完整保留参数",
       .filter({ hasText: "深圳技术大学" })
       .getByRole("link", { name: "加群" }),
   ).toHaveAttribute("href", legacyLink);
+});
+
+test("彩色圆点、圆形定位点和中心图标的二维码可识别", async ({ page }) => {
+  const wasmRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith(".wasm"))
+      wasmRequests.push(request.url());
+  });
+  await mockEditor(page);
+  await page.getByRole("button", { name: "添加奶群" }).click();
+  expect(wasmRequests).toHaveLength(0);
+  const wasmResponsePromise = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith(".wasm"),
+  );
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles(
+      fileURLToPath(new URL("./fixtures/styled-group-qr.png", import.meta.url)),
+    );
+  await expect(page.getByLabel("群链接")).toHaveValue(
+    "https://qm.qq.com/q/styled-test",
+  );
+  const wasmResponse = await wasmResponsePromise;
+  expect(wasmResponse.status()).toBe(200);
+  expect(wasmResponse.headers()["content-type"]).toContain("application/wasm");
+  expect(wasmRequests).toHaveLength(1);
+  expect(new URL(wasmRequests[0]).origin).toBe(new URL(page.url()).origin);
+});
+
+test("QQ 异形二维码实图识别", async ({ page }) => {
+  test.skip(!process.env.QQ_QR_SAMPLE, "通过 QQ_QR_SAMPLE 提供 QQ 保存的原图");
+  await mockEditor(page);
+  await page.getByRole("button", { name: "添加奶群" }).click();
+  await page.getByLabel("群链接").fill("https://qm.qq.com/q/previous");
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles(process.env.QQ_QR_SAMPLE!);
+  await expect(page.getByLabel("群链接")).not.toHaveValue(
+    "https://qm.qq.com/q/previous",
+  );
+  await expect(page.getByLabel("群链接")).toHaveValue(
+    "https://qm.qq.com/q/lnNAZvuNKS",
+  );
 });
 
 test("前端校验拦截非法输入，不发写入请求", async ({ page }) => {
