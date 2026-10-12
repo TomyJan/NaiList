@@ -184,7 +184,7 @@ export default function App() {
               width="38"
               height="38"
             />
-            <span>naiList</span>
+            <span>NaiList</span>
           </a>
           <div className="nav-right">
             <a
