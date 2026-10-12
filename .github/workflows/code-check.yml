@@ -1,0 +1,165 @@
+name: Check Code
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Go checks and PostgreSQL tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nailist
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: nailist
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nailist -d nailist"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://nailist:ci-test-password@localhost:5432/nailist?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format and vet
+        run: |
+          test -z "$(gofmt -l cmd internal migrations)"
+          go vet ./...
+      - name: Workflow syntax
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml
+      - name: Tests including database integration
+        run: go test -race -count=1 ./...
+      - name: Build backend
+        run: go build ./cmd/server
+
+  frontend:
+    name: TypeScript checks, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Format and typecheck
+        run: |
+          npx prettier --check src e2e '*.ts' package.json tsconfig.json index.html
+          npx tsc --noEmit
+      - name: Release version tests
+        run: node --test ../scripts/release-version.test.mjs
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7
+
+  e2e:
+    name: Light and dark browser tests
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nailist
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: nailist
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nailist -d nailist"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://nailist:ci-test-password@localhost:5432/nailist?sslmode=disable
+      PUBLIC_URL: http://127.0.0.1:8080
+      LISTEN_ADDR: 127.0.0.1:8080
+      TEST_APP_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chrome
+        working-directory: web
+      - name: Start backend and run browser tests
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/nailist" ./cmd/server
+          "$RUNNER_TEMP/nailist" > server.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent "$PUBLIC_URL/api/health" > /dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then cat server.log; exit 1; fi
+          npm --prefix web run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-test-results
+          path: |
+            web/test-results
+            server.log
+          retention-days: 7
+
+  docker:
+    name: Docker build
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Validate deployment configuration
+        env:
+          POSTGRES_PASSWORD: ci-test-password
+          PUBLIC_URL: https://groups.example.com
+        run: docker compose config --quiet
+      - name: Build container
+        run: docker build --tag nailist:ci .
