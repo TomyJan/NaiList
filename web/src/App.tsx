@@ -7,6 +7,8 @@ import {
   LogOut,
   Pencil,
   Plus,
+  RefreshCw,
+  Shuffle,
   Search,
   Settings,
   ShieldCheck,
@@ -360,10 +362,17 @@ export default function App() {
                   <span className="title-dot">.</span>
                 </h1>
                 {!manage && (
-                  <p>
-                    登录后可上传与管理自己的奶群; 所有信息由用户自行上传,
-                    请注意甄别; 帮助支持信息请查看页脚
-                  </p>
+                  <div className="heading-intro">
+                    <p>登录后可上传与管理自己的奶群</p>
+                    <ul className="heading-notes">
+                      <li className="shuffle-note">
+                        <Shuffle size={14} aria-hidden="true" />
+                        每次加载列表随机排序, 以保证曝光
+                      </li>
+                      <li>所有信息由用户自行上传, 请注意甄别</li>
+                      <li>帮助支持信息请查看页脚</li>
+                    </ul>
+                  </div>
                 )}
               </div>
               {manage && user && (
@@ -388,23 +397,38 @@ export default function App() {
               </div>
             ) : (
               <>
-                <div className="search-box">
-                  <Search size={20} />
-                  <input
-                    aria-label="搜索奶群"
-                    placeholder="搜索学校、群号或关键词"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  {query && (
-                    <button
-                      aria-label="清空搜索"
-                      className="icon-button"
-                      onClick={() => setQuery("")}
-                    >
-                      <X size={18} />
-                    </button>
-                  )}
+                <div className="search-toolbar">
+                  <div className="search-box">
+                    <Search size={20} />
+                    <input
+                      aria-label="搜索奶群"
+                      placeholder="搜索学校、群号或关键词"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                    {query && (
+                      <button
+                        aria-label="清空搜索"
+                        className="icon-button"
+                        onClick={() => setQuery("")}
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="secondary refresh-button"
+                    aria-label="刷新列表"
+                    title="刷新列表"
+                    disabled={loading}
+                    onClick={() => setRevision((v) => v + 1)}
+                  >
+                    <RefreshCw
+                      size={20}
+                      className={loading ? "refresh-spinning" : undefined}
+                      aria-hidden="true"
+                    />
+                  </button>
                 </div>
                 <div className="list-caption">
                   <span>{loading ? "加载中" : `${visible.length} 个奶群`}</span>
