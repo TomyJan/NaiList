@@ -122,7 +122,7 @@ jobs:
     env:
       DATABASE_URL: postgres://nailist:ci-test-password@localhost:5432/nailist?sslmode=disable
       PUBLIC_URL: http://127.0.0.1:8080
-      LISTEN_ADDR: 127.0.0.1:8080
+      PORT: "8080"
       TEST_APP_URL: http://127.0.0.1:8080
     steps:
       - uses: actions/checkout@v7
@@ -229,7 +229,7 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
       - name: Validate deployment configuration
         env:
-          POSTGRES_PASSWORD: ci-test-password
+          DATABASE_URL: postgres://nailist:ci-test-password@postgres.example.com:5432/nailist?sslmode=disable
           PUBLIC_URL: https://groups.example.com
         run: docker compose config --quiet
       - name: Build container

@@ -27,6 +27,10 @@ func main() {
 	if err := loadEnvironment(); err != nil {
 		log.Fatal("加载 .env 失败，请检查文件权限和格式")
 	}
+	dsn := databaseURL()
+	if dsn == "" {
+		log.Fatal("请在 .env 或环境变量中配置 DATABASE_URL")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	publicURL := strings.TrimRight(env("PUBLIC_URL", "http://localhost:8080"), "/")
@@ -34,7 +38,7 @@ func main() {
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.Path != "" {
 		log.Fatal("PUBLIC_URL 必须是站点源地址")
 	}
-	db, err := pgxpool.New(ctx, databaseURL())
+	db, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,7 +51,7 @@ func main() {
 	if err = migrate(startup, db); err != nil {
 		log.Fatal("迁移失败：", err)
 	}
-	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY"), WebDir: os.Getenv("WEB_DIR")}
+	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY")}
 	unionID, err := strconv.ParseBool(env("QQ_USE_UNIONID", "false"))
 	if err != nil {
 		log.Fatal("QQ_USE_UNIONID 必须为 true 或 false")

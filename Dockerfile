@@ -26,8 +26,8 @@ RUN apk add --no-cache ca-certificates tzdata \
 COPY --from=backend --chown=nailist:nailist /nailist /app/nailist
 WORKDIR /app
 USER nailist
-ENV LISTEN_ADDR=:8080
+ENV PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8080/api/health || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:${PORT}/api/health || exit 1
 ENTRYPOINT ["/app/nailist"]

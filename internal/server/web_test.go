@@ -3,8 +3,6 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -39,17 +37,5 @@ func TestEmbeddedWebWithoutExternalFiles(t *testing.T) {
 		if out.Code != http.StatusNotFound {
 			t.Fatalf("%s: expected 404, got %d", route, out.Code)
 		}
-	}
-}
-
-func TestWebDirOverride(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("custom frontend"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	out := httptest.NewRecorder()
-	serveWeb(out, httptest.NewRequest(http.MethodGet, "/manage", nil), dir)
-	if out.Code != http.StatusOK || out.Body.String() != "custom frontend" {
-		t.Fatalf("override: %d %s", out.Code, out.Body.String())
 	}
 }

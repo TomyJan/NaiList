@@ -4,30 +4,29 @@ Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。前�
 
 ## 配置
 
-Docker 和裸跑共用 `.env.example`。复制为工作目录下的 `.env`，设置数据库密码、站点地址和登录方式；也可以直接传入同名环境变量。优先级：**进程环境变量 > `.env` > 默认值**。密码包含 `$`、`#` 等字符时用单引号包裹。
+准备已创建数据库的 PostgreSQL 16+，将 `.env.example` 复制为工作目录下的 `.env`，填写连接串、站点地址和登录方式。Docker 和裸跑使用相同字段，进程环境变量优先于 `.env`。
 
 ```env
-POSTGRES_PASSWORD=随机的长密码
+DATABASE_URL=postgres://nailist:密码@数据库地址:5432/nailist?sslmode=disable
 PUBLIC_URL=https://群列表域名
 QQ_APP_ID=QQ互联应用ID
 QQ_APP_KEY=QQ互联应用密钥
-APP_PORT=8080
+PORT=8080
 ```
 
-数据库用户和库名默认均为 `nailist`，密码使用 `POSTGRES_PASSWORD`；裸跑默认连接 `127.0.0.1:5432`，Compose 默认连接 `db:5432`。可用 `POSTGRES_HOST`、`POSTGRES_PORT` 修改地址，或用优先级更高的 `DATABASE_URL` 指定完整连接串（含自定义用户、库名和 TLS 参数）。
-
-`APP_PORT` 是访问端口；裸跑默认监听 `:APP_PORT`，可用 `LISTEN_ADDR` 覆盖。Compose 内部固定监听 `:8080`，对外映射到 `127.0.0.1:APP_PORT`。
+数据库只使用 `DATABASE_URL`，连接串中的密码特殊字符需 URL 编码。服务监听 `PORT`（默认 8080），前端固定内嵌。QQ/OIDC 配置见下方「登录方式与账号绑定」。
 
 ## Docker 部署
 
-需要 Docker Compose。完成上方配置后，在仓库目录启动全部服务：
+镜像仅运行奶群主程序，PostgreSQL 自行提供；连接串中的数据库地址须能从容器访问。准备 `compose.yaml` 和 `.env` 后运行：
 
 ```sh
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f app
 ```
 
-应用只监听本机 `127.0.0.1:8080`，数据库不开放公网端口。将域名 A/AAAA 记录指向服务器，开放 80/443 端口并准备 TLS 证书。为域名配置 HTTPS 反向代理到 `127.0.0.1:8080`，并传递原始 Host 和协议头。以下配置放入已有 HTTPS Nginx `server` 块：
+Compose 将应用端口映射到本机 `127.0.0.1:PORT`。将域名 A/AAAA 记录指向服务器，开放 80/443 端口并准备 TLS 证书。为域名配置 HTTPS 反向代理到 `127.0.0.1:8080`（与 `PORT` 一致），并传递原始 Host 和协议头。以下配置放入已有 HTTPS Nginx `server` 块：
 
 ```nginx
 location / {
@@ -39,7 +38,7 @@ location / {
 }
 ```
 
-在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose up -d --build`。备份：`docker compose exec -T db pg_dump -U nailist nailist > backup.sql`。恢复：`docker compose exec -T db psql -U nailist nailist < backup.sql`（恢复到空数据库）。
+在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose pull && docker compose up -d`。升级前备份外部 PostgreSQL 数据库，备份与恢复由数据库管理工具执行。
 
 ## 二进制部署
 
@@ -50,7 +49,7 @@ chmod +x nailist
 ./nailist
 ```
 
-程序自动加载 `.env`，文件不存在时使用环境变量；格式错误时拒绝启动。无需解压、Node.js 或单独部署前端。QQ/OIDC 配置见下方「登录方式与账号绑定」，HTTPS 反向代理配置同 Docker 部署。启动时自动迁移数据库，更新时备份数据库、停止服务、替换二进制并重启即可。默认无需 `WEB_DIR`；仅需要覆盖内嵌前端时设置为外置资源目录。
+程序自动加载 `.env`，文件不存在时使用环境变量；格式错误或未配置 `DATABASE_URL` 时拒绝启动。无需解压、Node.js 或单独部署前端，HTTPS 反向代理配置同 Docker 部署。启动时自动迁移数据库，更新时备份数据库、停止服务、替换二进制并重启即可。
 
 ## 本地开发
 
@@ -113,4 +112,4 @@ OIDC_SCOPES=
 
 `OIDC_ID` 是稳定的小写登录方式标识，不能为 `qq`；客户端 ID 是独立的 `OIDC_CLIENT_ID`。名称必填，图标可选（HTTPS URL 或站内路径）。Issuer 需为 HTTPS，支持标准 OIDC discovery、授权码模式及 PKCE S256；注册精确回调 `https://群列表域名/auth/campus/callback`（campus 替换为实际 ID）。密钥对公开客户端可留空，默认请求 `openid profile`，额外 scope 用空格分隔。验证 ID Token 签名、issuer、audience、过期时间和 nonce，使用 issuer + sub 识别身份，密钥和 token 不返回前端。
 
-部署升级自动将旧 QQ 账号迁移到身份表，保留账号 ID、群归属和现有会话。首次登录原 QQ 应用会补齐身份所属应用。已有绑定后不要改 OIDC_ID / OIDC_ISSUER；显示名称和图标可调整。迁移前按部署章节备份数据库。
+部署升级自动将旧 QQ 账号迁移到身份表，保留账号 ID、群归属和现有会话。首次登录原 QQ 应用会补齐身份所属应用。已有绑定后不要改 OIDC_ID / OIDC_ISSUER；显示名称和图标可调整。迁移前备份数据库。

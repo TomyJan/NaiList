@@ -4,20 +4,16 @@ import (
 	"io/fs"
 	"nailist/web"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 )
 
-func serveWeb(w http.ResponseWriter, r *http.Request, dir string) {
+func serveWeb(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.NotFound(w, r)
 		return
 	}
 	files := web.Files()
-	if dir != "" {
-		files = os.DirFS(dir)
-	}
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 	if info, err := fs.Stat(files, name); err == nil && !info.IsDir() {
 		http.ServeFileFS(w, r, files, name)

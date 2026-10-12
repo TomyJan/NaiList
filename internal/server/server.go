@@ -19,9 +19,9 @@ import (
 )
 
 type Config struct {
-	PublicURL, QQAppID, QQAppKey, WebDir string
-	QQUseUnionID                         bool
-	OIDC                                 OIDCConfig
+	PublicURL, QQAppID, QQAppKey string
+	QQUseUnionID                 bool
+	OIDC                         OIDCConfig
 }
 type User struct {
 	ID        int64  `json:"id"`
@@ -92,7 +92,7 @@ func (s *Server) Routes() http.Handler {
 			respond(w, 404, map[string]string{"error": "接口不存在"})
 			return
 		}
-		serveWeb(w, r, s.cfg.WebDir)
+		serveWeb(w, r)
 	})
 	return r
 }
