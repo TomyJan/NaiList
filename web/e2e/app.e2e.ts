@@ -85,7 +85,7 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
   );
   await expect(footer).toContainText("反馈支持请搜索加入 兰理工 群");
   await expect(page.locator(".page-heading p")).toContainText(
-    "请查看页脚联系站长",
+    "帮助支持信息请查看页脚",
   );
   const compiledVersion = await page
     .locator('meta[name="nailist-version"]')
