@@ -29,7 +29,12 @@ import type { Group, GroupInput, User, LoginProvider } from "./types";
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const manage = path === "/manage";
-  const adminPage = path === "/admin/users" || path === "/admin/groups";
+  const adminPage = [
+    "/admin",
+    "/admin/",
+    "/admin/users",
+    "/admin/groups",
+  ].includes(path);
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [providers, setProviders] = useState<
@@ -290,7 +295,7 @@ export default function App() {
                     {user.isAdmin && (
                       <button
                         role="menuitem"
-                        onClick={() => navigate("/admin/users")}
+                        onClick={() => navigate("/admin")}
                       >
                         <ShieldCheck size={16} />
                         站点管理
@@ -337,7 +342,13 @@ export default function App() {
         {adminPage ? (
           <Admin
             key={`${path}:${user?.id ?? "guest"}`}
-            page={path === "/admin/users" ? "users" : "groups"}
+            page={
+              path === "/admin/users"
+                ? "users"
+                : path === "/admin/groups"
+                  ? "groups"
+                  : "overview"
+            }
             user={user}
             authLoaded={authLoaded}
             providers={providers}

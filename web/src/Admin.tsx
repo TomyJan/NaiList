@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Search, X } from "lucide-react";
 import { api, ApiError, writeOptions } from "./api";
+import { AdminOverview } from "./AdminOverview";
 import { GroupForm } from "./GroupForm";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { notify } from "./notifications";
@@ -28,7 +29,7 @@ export function Admin({
   onLogin,
   onSessionExpired,
 }: {
-  page: "users" | "groups";
+  page: "overview" | "users" | "groups";
   user: User | null;
   authLoaded: boolean;
   providers: LoginProvider[] | null | undefined;
@@ -54,7 +55,7 @@ export function Admin({
     };
   }, []);
   useEffect(() => {
-    if (!user?.isAdmin) return;
+    if (!user?.isAdmin || page === "overview") return;
     const controller = new AbortController();
     setLoading(true);
     setFailed(false);
@@ -146,24 +147,32 @@ export function Admin({
   return (
     <>
       <nav className="admin-nav" aria-label="站点管理导航">
-        {(["users", "groups"] as const).map((tab) => (
+        {(["overview", "users", "groups"] as const).map((tab) => (
           <a
             key={tab}
-            href={`/admin/${tab}`}
+            href={tab === "overview" ? "/admin" : `/admin/${tab}`}
             className={page === tab ? "active" : ""}
             aria-current={page === tab ? "page" : undefined}
             onClick={(event) => {
               event.preventDefault();
-              navigate(`/admin/${tab}`);
+              navigate(tab === "overview" ? "/admin" : `/admin/${tab}`);
             }}
           >
-            {tab === "users" ? "用户管理" : "奶群管理"}
+            {tab === "overview"
+              ? "概览"
+              : tab === "users"
+                ? "用户管理"
+                : "奶群管理"}
           </a>
         ))}
       </nav>
       <section className="page-heading">
         <h1>
-          {page === "users" ? "用户管理" : "奶群管理"}
+          {page === "overview"
+            ? "站点概览"
+            : page === "users"
+              ? "用户管理"
+              : "奶群管理"}
           <span className="title-dot">.</span>
         </h1>
       </section>
@@ -178,6 +187,8 @@ export function Admin({
         </div>
       ) : !user.isAdmin ? (
         <div className="empty">无权限访问站点管理</div>
+      ) : page === "overview" ? (
+        <AdminOverview onSessionExpired={onSessionExpired} />
       ) : (
         <>
           <div className="search-box">

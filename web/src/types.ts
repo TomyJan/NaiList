@@ -41,3 +41,11 @@ export interface GroupInput {
   qqNumber: string;
   joinUrl: string;
 }
+
+export interface AdminStats {
+  users: number;
+  groups: number;
+  contributors: number;
+  organizations: number;
+  daily: { date: string; users: number; groups: number }[];
+}

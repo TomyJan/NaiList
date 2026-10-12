@@ -25,6 +25,18 @@ const group = {
   ownerId: 1,
 };
 
+const overview = {
+  users: 18,
+  groups: 42,
+  contributors: 12,
+  organizations: 20,
+  daily: Array.from({ length: 30 }, (_, index) => ({
+    date: new Date(Date.UTC(2026, 8, 13 + index)).toISOString().slice(0, 10),
+    users: index === 29 ? 3 : 0,
+    groups: index === 29 ? 2 : index === 0 ? 4 : 0,
+  })),
+};
+
 async function setup(page: Page, isAdmin = true) {
   await page.route("http://umami.test/**", (r) => r.fulfill({ body: "" }));
   await page.route("**/api/me", (r) =>
@@ -40,6 +52,7 @@ async function setup(page: Page, isAdmin = true) {
   );
   await page.route("**/api/groups", (r) => r.fulfill({ json: [group] }));
   await page.route("**/api/my/groups", (r) => r.fulfill({ json: [group] }));
+  await page.route("**/api/admin/stats", (r) => r.fulfill({ json: overview }));
   await page.route("**/api/admin/users", (r) => r.fulfill({ json: users }));
   await page.route("**/api/admin/groups", (r) => r.fulfill({ json: [group] }));
 }
@@ -50,6 +63,12 @@ test("管理员入口、完整用户列表、搜索和安全限制", async ({ pa
   await expect(page.getByText("账号 ID：1", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "账户菜单" }).click();
   await page.getByRole("menuitem", { name: "站点管理" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "站点概览" })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "站点管理导航" })
+    .getByRole("link", { name: "用户管理" })
+    .click();
   await expect(page.getByRole("heading", { name: "用户管理" })).toBeVisible();
   await expect(page.locator(".admin-user")).toHaveCount(3);
   await expect(
@@ -300,4 +319,146 @@ test("被管理员解绑的个人会话保存返回401后刷新认证并清草�
   expect(
     await page.evaluate(() => sessionStorage.getItem("nailist:draft:1:10")),
   ).toBeNull();
+});
+
+test("概览直达、统计、趋势切换与刷新不加载完整管理列表", async ({ page }) => {
+  await setup(page);
+  const requests: string[] = [];
+  page.on("request", (request) =>
+    requests.push(new URL(request.url()).pathname),
+  );
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "站点概览" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "站点管理导航" })
+      .getByRole("link", { name: "概览" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByLabel("用户总数", { exact: true })).toContainText(
+    "18",
+  );
+  await expect(page.getByLabel("有效奶群", { exact: true })).toContainText(
+    "42",
+  );
+  await expect(page.getByLabel("上传用户", { exact: true })).toContainText(
+    "12",
+  );
+  await expect(page.getByLabel("学校 / 单位", { exact: true })).toContainText(
+    "20",
+  );
+  await expect(page.locator(".stat-card").first()).toContainText("今日新增 3");
+  await expect(page.locator(".trend-card").last()).toContainText("共 6 个");
+  await expect(page.locator(".trend-day")).toHaveCount(60);
+  await page.getByRole("button", { name: "7 天", exact: true }).click();
+  await expect(page.locator(".trend-day")).toHaveCount(14);
+  await expect(page.locator(".trend-card").last()).toContainText("共 2 个");
+  await page.locator(".trend-day").first().focus();
+  await expect(page.locator(".trend-detail").first()).toContainText("10-06");
+  await page.getByRole("button", { name: "30 天", exact: true }).click();
+  await page.route("**/api/admin/stats", (r) =>
+    r.fulfill({ json: { ...overview, users: 19 } }),
+  );
+  await page.getByRole("button", { name: "刷新统计" }).click();
+  await expect(page.getByLabel("用户总数", { exact: true })).toContainText(
+    "19",
+  );
+  expect(requests.filter((path) => path === "/api/admin/stats")).toHaveLength(
+    2,
+  );
+  expect(requests).not.toContain("/api/admin/users");
+  expect(requests).not.toContain("/api/admin/groups");
+  expect(requests).not.toContain("/api/groups");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: `../.superpowers/evidence/admin-overview-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: `../.superpowers/evidence/admin-overview-mobile-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  await page
+    .getByRole("navigation", { name: "站点管理导航" })
+    .getByRole("link", { name: "奶群管理" })
+    .click();
+  await expect(page.locator(".admin-group")).toHaveCount(1);
+  await page
+    .getByRole("navigation", { name: "站点管理导航" })
+    .getByRole("link", { name: "概览", exact: true })
+    .click();
+  await expect(page.getByLabel("用户总数", { exact: true })).toContainText(
+    "19",
+  );
+});
+
+test("概览失败重试、零数据和权限限制", async ({ page }) => {
+  await setup(page);
+  await page.route("**/api/admin/stats", (r) =>
+    r.fulfill({ status: 503, json: { error: "统计暂不可用" } }),
+  );
+  await page.goto("/admin");
+  await expect(page.getByRole("alert")).toContainText("统计暂不可用");
+  await expect(page.getByText("统计加载失败", { exact: true })).toBeVisible();
+  await page.route("**/api/admin/stats", (r) =>
+    r.fulfill({
+      json: {
+        users: 0,
+        groups: 0,
+        contributors: 0,
+        organizations: 0,
+        daily: overview.daily.map((day) => ({ ...day, users: 0, groups: 0 })),
+      },
+    }),
+  );
+  await page.getByRole("button", { name: "重试", exact: true }).click();
+  await expect(page.locator(".stat-value")).toHaveText(["0", "0", "0", "0"]);
+  await expect(page.getByText("暂无新增", { exact: true })).toHaveCount(2);
+  await page.route("**/api/me", (r) =>
+    r.fulfill({ json: { ...users[0], isAdmin: false } }),
+  );
+  let statsRequests = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/admin/stats") statsRequests++;
+  });
+  await page.reload();
+  await expect(page.getByText("无权限访问站点管理")).toBeVisible();
+  expect(statsRequests).toBe(0);
+  await page.route("**/api/me", (r) => r.fulfill({ json: null }));
+  await page.reload();
+  await expect(page.getByText("登录后访问站点管理")).toBeVisible();
+  expect(statsRequests).toBe(0);
+});
+
+test("概览刷新期间避免重复请求，会话失效后清除统计", async ({ page }) => {
+  await setup(page);
+  await page.goto("/admin/");
+  await expect(page.getByLabel("用户总数", { exact: true })).toContainText(
+    "18",
+  );
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/admin/stats", async (route) => {
+    await pending;
+    return route.fulfill({ status: 401, json: { error: "请先登录" } });
+  });
+  await page.route("**/api/me", (route) => route.fulfill({ json: null }));
+  const refresh = page.getByRole("button", { name: "刷新统计" });
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  await expect(page.getByLabel("加载统计中")).toBeVisible();
+  release();
+  await expect(page.getByText("登录后访问站点管理")).toBeVisible();
+  await expect(page.locator(".stat-card")).toHaveCount(0);
 });
