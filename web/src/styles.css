@@ -1,6 +1,6 @@
 :root {
   color-scheme: light dark;
-  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
+  font-family: MiSans, "Microsoft YaHei", system-ui, sans-serif;
   color: #1c2b23;
   background: #f7faf7;
   font-synthesis: none;
@@ -14,6 +14,39 @@
 }
 body {
   margin: 0;
+}
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.footer {
+  margin-top: auto;
+  padding: 22px 20px 26px;
+  border-top: 1px solid #e1eae3;
+  color: #70806f;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.footer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+}
+.footer-version {
+  overflow-wrap: anywhere;
+}
+.footer a {
+  color: #477835;
+}
+.footer a:hover {
+  text-decoration: underline;
+}
+.footer p {
+  margin-top: 4px;
 }
 button,
 input,
@@ -172,6 +205,7 @@ p {
   background: #f0f6ef;
 }
 .main {
+  width: 100%;
   max-width: 1040px;
   margin: 0 auto;
   padding: 52px 32px 64px;
@@ -396,6 +430,7 @@ h1 {
   left: 50%;
   bottom: 30px;
   transform: translateX(-50%);
+  width: max-content;
   max-width: calc(100% - 32px);
   padding: 12px 22px;
   border-radius: 11px;
@@ -405,6 +440,7 @@ h1 {
   z-index: 50;
   white-space: normal;
   text-align: center;
+  line-height: 1.6;
 }
 .modal {
   border: 1px solid #dfe8dd;
@@ -603,6 +639,13 @@ h1 {
 }
 
 @media (prefers-color-scheme: dark) {
+  .footer {
+    color: #a5b7ab;
+    border-top-color: #304137;
+  }
+  .footer a {
+    color: #c4e3a8;
+  }
   :root {
     color: #e3ece5;
     background: #121a16;

@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: Binary version; defaults to dev-<commit>
+        description: Expected release version; otherwise derived from Git
         type: string
         required: false
         default: ""
@@ -124,6 +124,8 @@ jobs:
       PUBLIC_URL: http://127.0.0.1:8080
       PORT: "8080"
       TEST_APP_URL: http://127.0.0.1:8080
+      UMAMI_SCRIPT_URL: http://umami.test/script.js
+      UMAMI_WEBSITE_ID: 00000000-0000-0000-0000-000000000001
     steps:
       - uses: actions/checkout@v7
         with:
@@ -188,8 +190,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -203,13 +209,18 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
-          VERSION: ${{ inputs.version || format('dev-{0}', github.sha) }}
+          RELEASE_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           mkdir -p dist
+          VERSION=$(node scripts/build-version.mjs)
+          if [ -n "$RELEASE_VERSION" ] && [ "$VERSION" != "$RELEASE_VERSION" ]; then
+            echo 'Compiled version does not match release version.' >&2
+            exit 1
+          fi
           binary="nailist-$VERSION-$GOOS-$GOARCH"
           if [ "$GOOS" = windows ]; then binary="$binary.exe"; fi
-          go build -trimpath -ldflags='-s -w' -o "dist/$binary" ./cmd/server
+          node scripts/build.mjs -o "dist/$binary"
       - uses: actions/upload-artifact@v7
         with:
           path: dist/nailist-*
@@ -225,12 +236,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
       - name: Validate deployment configuration
         env:
           DATABASE_URL: postgres://nailist:ci-test-password@postgres.example.com:5432/nailist?sslmode=disable
           PUBLIC_URL: https://groups.example.com
         run: docker compose config --quiet
       - name: Build container
-        run: docker build --tag nailist:ci .
+        run: docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" --tag nailist:ci .

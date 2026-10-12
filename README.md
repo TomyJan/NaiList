@@ -16,6 +16,15 @@ PORT=8080
 
 数据库只使用 `DATABASE_URL`，连接串中的密码特殊字符需 URL 编码。服务监听 `PORT`（默认 8080），前端固定内嵌。QQ/OIDC 配置见下方「登录方式与账号绑定」。
 
+Umami 在同一 `.env` 中配置：
+
+```env
+UMAMI_SCRIPT_URL=https://统计域名/script.js
+UMAMI_WEBSITE_ID=Umami网站ID
+```
+
+两项同时留空则关闭统计。修改后重启程序（Docker 执行 `docker compose up -d`）即可；启动时注入页面并设置对应 CSP，无需重新构建前端。MiSans 通过 CDN 加载，字体文件来自小米字体服务。
+
 ## Docker 部署
 
 镜像仅运行奶群主程序，PostgreSQL 自行提供；连接串中的数据库地址须能从容器访问。准备 `compose.yaml` 和 `.env` 后运行：
@@ -63,7 +72,15 @@ go run ./cmd/server
 运行 Go 构建、测试前，必须先构建前端（`web/dist` 不提交到仓库）。构建后端时前端资源会一并嵌入，修改前端后需要重新构建并启动 Go 服务。生成可部署二进制：
 
 ```sh
-go build -trimpath -ldflags="-s -w" -o nailist ./cmd/server
+node scripts/build.mjs -o nailist
+```
+
+构建脚本将版本固定进二进制：首页页脚和 `--version` 一致。当前提交有对应 `vX.Y.Z` 标签时显示 `X.Y.Z`，否则显示 `X.Y.Z-短hash`；运行时无需 Git，移动二进制或修改配置不会改变版本。构建前须保留 Git 元数据和标签（CI 已配置完整检出）。直接 `go run` 用于开发，可能显示 `-dev`。
+
+自行构建 Docker 镜像时传入同一编译版本：
+
+```sh
+docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t nailist:local .
 ```
 
 访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。
@@ -71,6 +88,8 @@ go build -trimpath -ldflags="-s -w" -o nailist ./cmd/server
 ## 功能与验证
 
 首页完整加载群列表，实时搜索学校/单位、群号及隐藏关键词；支持复制群号和直达加群。登录用户可添加、编辑、删除本人群信息。群号全站唯一，添加或编辑重复群号时提示前往首页搜索查看。
+
+首页页脚提供项目与反馈支持入口。添加、编辑成功后提醒首页群信息可能需一分钟更新，以适配 `/api/groups` 的 CDN 缓存；登录、管理与写入接口请勿缓存。
 
 ```sh
 go test ./...
@@ -82,7 +101,7 @@ cd web && pnpm test && pnpm run build
 
 ## 自动检查与发版
 
-Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-dev-<commit>-linux-amd64`，前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
+Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-X.Y.Z-短hash-linux-amd64`（标签提交省略 hash），前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
 
 发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；无标签时从 `web/package.json` 的 `0.1.0` 起算，首次默认发 `v0.1.1`。工作流同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，并原子推送默认分支与同名标签；主分支保护规则需允许工作流推送。随后检查、二进制和镜像均使用该发布提交。若默认分支在操作期间更新，推送会失败，需重新触发。
 
@@ -90,7 +109,7 @@ Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `maste
 
 发布任务需要 `contents: write`（工作流已配置）。Release 仅使用准备阶段已推送且指向发布提交的标签，避免发布时临时给旧提交创建标签触发权限限制。若旧版本工作流报 403，推送最新代码后重新 **Run workflow**；旧运行的 **Re-run jobs** 仍使用旧工作流。
 
-后端版本可执行 `./nailist --version` 查看，前端版本写入页面 `<html data-version="X.Y.Z">`。
+后端版本可执行 `./nailist --version` 查看，同一编译版本注入页脚和 `<html data-version="X.Y.Z[-短hash]">`。
 
 ## 登录方式与账号绑定
 

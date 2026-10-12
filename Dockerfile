@@ -7,6 +7,7 @@ COPY web/ ./
 RUN pnpm run build
 
 FROM golang:1.25-alpine AS backend
+ARG BUILD_VERSION
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -15,7 +16,8 @@ COPY internal/ ./internal/
 COPY migrations/ ./migrations/
 COPY web/assets.go ./web/assets.go
 COPY --from=frontend /src/web/dist/ ./web/dist/
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nailist ./cmd/server
+RUN test -n "$BUILD_VERSION" \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.buildVersion=$BUILD_VERSION" -o /nailist ./cmd/server
 
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \

@@ -20,8 +20,9 @@ import (
 )
 
 func main() {
+	version := applicationVersion()
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Println("nailist " + Version)
+		fmt.Println("nailist " + version)
 		return
 	}
 	if err := loadEnvironment(); err != nil {
@@ -52,6 +53,12 @@ func main() {
 		log.Fatal("迁移失败：", err)
 	}
 	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY")}
+	cfg.Version = version
+	cfg.UmamiScriptURL = os.Getenv("UMAMI_SCRIPT_URL")
+	cfg.UmamiWebsiteID = os.Getenv("UMAMI_WEBSITE_ID")
+	if err = server.ValidateWebConfig(cfg); err != nil {
+		log.Fatal(err)
+	}
 	unionID, err := strconv.ParseBool(env("QQ_USE_UNIONID", "false"))
 	if err != nil {
 		log.Fatal("QQ_USE_UNIONID 必须为 true 或 false")
@@ -69,7 +76,7 @@ func main() {
 		defer cancel()
 		_ = httpServer.Shutdown(shutdown)
 	}()
-	log.Printf("奶龙群列表 v%s：%s", Version, publicURL)
+	log.Printf("奶龙群列表 v%s：%s", version, publicURL)
 	if err = httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

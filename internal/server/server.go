@@ -19,9 +19,10 @@ import (
 )
 
 type Config struct {
-	PublicURL, QQAppID, QQAppKey string
-	QQUseUnionID                 bool
-	OIDC                         OIDCConfig
+	PublicURL, QQAppID, QQAppKey            string
+	Version, UmamiScriptURL, UmamiWebsiteID string
+	QQUseUnionID                            bool
+	OIDC                                    OIDCConfig
 }
 type User struct {
 	ID        int64  `json:"id"`
@@ -43,10 +44,13 @@ type Server struct {
 	db     *pgxpool.Pool
 	store  GroupStore
 	client *http.Client
+	web    http.Handler
+	csp    string
 }
 
 func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
-	return &Server{cfg: cfg, db: db, store: store, client: &http.Client{Timeout: 15 * time.Second}}
+	web, csp := newWebHandler(cfg)
+	return &Server{cfg: cfg, db: db, store: store, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp}
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -92,7 +96,7 @@ func (s *Server) Routes() http.Handler {
 			respond(w, 404, map[string]string{"error": "接口不存在"})
 			return
 		}
-		serveWeb(w, r)
+		s.web.ServeHTTP(w, r)
 	})
 	return r
 }
@@ -212,7 +216,7 @@ func (s *Server) headers(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", s.csp)
 		if strings.HasPrefix(r.URL.Path, "/api") || strings.HasPrefix(r.URL.Path, "/auth") {
 			w.Header().Set("Cache-Control", "no-store")
 		}

@@ -1,31 +1,74 @@
 package server
 
 import (
+	"bytes"
+	"errors"
+	"html"
 	"io/fs"
 	"nailist/web"
 	"net/http"
+	"net/url"
 	"path"
+	"regexp"
 	"strings"
+	"time"
 )
 
-func serveWeb(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.NotFound(w, r)
-		return
+func umamiOrigin(cfg Config) (string, error) {
+	if cfg.UmamiScriptURL == "" && cfg.UmamiWebsiteID == "" {
+		return "", nil
 	}
+	u, err := url.ParseRequestURI(cfg.UmamiScriptURL)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Fragment != "" || strings.ContainsAny(u.Host, " \t\r\n;,'\"<>\\") || !regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(cfg.UmamiWebsiteID) {
+		return "", errors.New("UMAMI_SCRIPT_URL 和 UMAMI_WEBSITE_ID 须同时配置，脚本地址须为 HTTP(S) URL，网站 ID 只能包含字母、数字、横线和下划线")
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func ValidateWebConfig(cfg Config) error {
+	_, err := umamiOrigin(cfg)
+	return err
+}
+
+// Capture the configured HTML once at startup; assets remain embedded and unchanged.
+func newWebHandler(cfg Config) (http.Handler, string) {
+	origin, configErr := umamiOrigin(cfg)
+	extra := ""
+	if origin != "" {
+		extra = " " + origin
+	}
+	csp := "default-src 'self'; script-src 'self'" + extra + "; style-src 'self' https://cdn.amoe.cc; font-src 'self' https://cdn-file.hyperos.mi.com; img-src 'self' https: data:; connect-src 'self'" + extra + "; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	files := web.Files()
-	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
-	if info, err := fs.Stat(files, name); err == nil && !info.IsDir() {
-		http.ServeFileFS(w, r, files, name)
-		return
+	index, err := fs.ReadFile(files, "index.html")
+	marker := "<!--__NAILIST_RUNTIME__-->"
+	if err == nil && !bytes.Contains(index, []byte(marker)) {
+		err = errors.New("missing runtime placeholder")
 	}
-	if r.URL.Path != "/" && r.URL.Path != "/manage" {
+	runtimeHTML := `<meta name="nailist-version" content="` + html.EscapeString(cfg.Version) + `" />`
+	if origin != "" {
+		runtimeHTML += `<script defer src="` + html.EscapeString(cfg.UmamiScriptURL) + `" data-website-id="` + html.EscapeString(cfg.UmamiWebsiteID) + `"></script>`
+	}
+	index = bytes.Replace(index, []byte(marker), []byte(runtimeHTML), 1)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path == "/" || r.URL.Path == "/manage" || r.URL.Path == "/index.html" {
+			if err != nil || configErr != nil {
+				http.Error(w, "前端或统计配置无效，请检查配置并重新构建前端", http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(index))
+			return
+		}
+		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		if info, err := fs.Stat(files, name); err == nil && !info.IsDir() {
+			http.ServeFileFS(w, r, files, name)
+			return
+		}
 		http.NotFound(w, r)
-		return
-	}
-	if _, err := fs.Stat(files, "index.html"); err != nil {
-		http.Error(w, "前端未构建，请运行 pnpm run build", 503)
-		return
-	}
-	http.ServeFileFS(w, r, files, "index.html")
+	}), csp
 }

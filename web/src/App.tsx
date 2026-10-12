@@ -16,6 +16,7 @@ import { api, writeOptions } from "./api";
 import { filterGroups } from "./search";
 import { GroupForm, DeleteDialog } from "./GroupForm";
 import { AccountBindings, LoginDialog } from "./Account";
+import { SITE_VERSION } from "./runtime";
 import type { Group, GroupInput, User, LoginProvider } from "./types";
 
 export default function App() {
@@ -113,10 +114,13 @@ export default function App() {
   }, [manage, user, revision, authLoaded]);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => {
-      setToast("");
-      setCopied(null);
-    }, 2600);
+    const timer = setTimeout(
+      () => {
+        setToast("");
+        setCopied(null);
+      },
+      toast.length > 20 ? 8000 : 2600,
+    );
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
@@ -144,7 +148,7 @@ export default function App() {
     );
     setEditor(null);
     setRevision((v) => v + 1);
-    setToast("已保存");
+    setToast("已保存。群信息可能需要一分钟才能更新到首页, 请耐心等待");
   };
   const remove = async () => {
     if (!user || !deleting) return;
@@ -279,7 +283,8 @@ export default function App() {
             </h1>
             {!manage && (
               <p>
-                登录后可上传与管理自己的奶群; 所有信息由用户自行上传, 请注意甄别
+                登录后可上传与管理自己的奶群; 所有信息由用户自行上传,
+                请注意甄别; 帮助支持信息请查看页脚
               </p>
             )}
           </div>
@@ -412,6 +417,26 @@ export default function App() {
           </>
         )}
       </main>
+      <footer className="footer">
+        <div className="footer-meta">
+          <span>
+            Powered by{" "}
+            <a href="https://vov.moe" target="_blank" rel="noopener noreferrer">
+              TomyJan
+            </a>
+          </span>
+          <span aria-hidden="true">|</span>
+          <span className="footer-version">V{SITE_VERSION}</span>
+          <a
+            href="https://github.com/TomyJan/NaiList"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+        </div>
+        <p>反馈支持请搜索加入 兰理工 群</p>
+      </footer>
       {loginDialog && (
         <LoginDialog
           providers={providers}

@@ -1,5 +1,42 @@
 import { test, expect } from "@playwright/test";
 import type { Group } from "../src/types";
+
+test.beforeEach(async ({ page }) => {
+  await page.route("http://umami.test/**", (route) =>
+    route.fulfill({ contentType: "application/javascript", body: "" }),
+  );
+});
+
+test("启动注入 Umami 脚本可执行并发送统计请求", async ({ page }) => {
+  let collected = false;
+  await page.route("http://umami.test/**", async (route) => {
+    if (new URL(route.request().url()).pathname === "/script.js") {
+      return route.fulfill({
+        contentType: "application/javascript",
+        body: `document.documentElement.dataset.umamiWebsite = document.currentScript.dataset.websiteId;
+          fetch('http://umami.test/api/send', { method: 'POST', body: 'pageview' });`,
+      });
+    }
+    collected = true;
+    return route.fulfill({
+      body: "ok",
+      headers: { "Access-Control-Allow-Origin": "*" },
+    });
+  });
+  await page.goto("/");
+  const script = page.locator("script[data-website-id]");
+  if ((await script.count()) === 0) {
+    expect(process.env.UMAMI_SCRIPT_URL).toBeFalsy();
+    return;
+  }
+  await expect(script).toHaveAttribute("src", "http://umami.test/script.js");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-umami-website",
+    "00000000-0000-0000-0000-000000000001",
+  );
+  await expect.poll(() => collected).toBe(true);
+});
+
 const seed: Group[] = [
   {
     id: 1,
@@ -37,6 +74,34 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await expect(page.locator("article")).toHaveCount(3);
+  const footer = page.getByRole("contentinfo");
+  await expect(footer.getByRole("link", { name: "TomyJan" })).toHaveAttribute(
+    "href",
+    "https://vov.moe",
+  );
+  await expect(footer.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/TomyJan/NaiList",
+  );
+  await expect(footer).toContainText("反馈支持请搜索加入 兰理工 群");
+  await expect(page.locator(".page-heading p")).toContainText(
+    "帮助支持信息请查看页脚",
+  );
+  const compiledVersion = await page
+    .locator('meta[name="nailist-version"]')
+    .getAttribute("content");
+  expect(compiledVersion).toMatch(/^\d+\.\d+\.\d+(?:-[a-f0-9]{7,})?$/);
+  await expect(footer.locator(".footer-version")).toHaveText(
+    `V${compiledVersion}`,
+  );
+  expect(
+    await page.evaluate(() => getComputedStyle(document.body).fontFamily),
+  ).toContain("MiSans");
+  await expect(
+    page.locator(
+      'link[href="https://cdn.amoe.cc/web-static/public/font/misans/misans.css"]',
+    ),
+  ).toHaveCount(1);
   await expect(
     page.locator("header").getByRole("link", { name: "首页", exact: true }),
   ).toHaveCount(0);
@@ -151,10 +216,16 @@ test("管理页添加、编辑、删除、退出", async ({ page }) => {
   });
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.locator("article")).toHaveCount(4);
+  await expect(page.getByRole("status")).toContainText(
+    "群信息可能需要一分钟才能更新到首页, 请耐心等待",
+  );
   await page.getByRole("button", { name: "编辑 测试大学" }).click();
   await page.getByLabel("关键词").fill("简称🍐");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText(
+    "群信息可能需要一分钟才能更新到首页, 请耐心等待",
+  );
   await page.getByRole("textbox", { name: "搜索奶群" }).fill("简称🍐");
   await expect(page.locator("article")).toHaveCount(1);
   await page.getByRole("button", { name: "删除 测试大学" }).click();
