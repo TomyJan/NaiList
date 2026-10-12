@@ -100,3 +100,33 @@ func TestCrossSiteAndBadCSRFRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupWritesRejectInvalidFields(t *testing.T) {
+	for _, method := range []string{"POST", "PUT"} {
+		for _, input := range []groups.Input{
+			{Organization: strings.Repeat("校", 33), QQNumber: "12345", JoinURL: "https://qm.qq.com/q/test"},
+			{Organization: "学校", Keywords: strings.Repeat("梨", 129), QQNumber: "12345", JoinURL: "https://qm.qq.com/q/test"},
+			{Organization: "学校", QQNumber: "123456789012", JoinURL: "https://qm.qq.com/q/test"},
+			{Organization: "学校", QQNumber: "12345", JoinURL: "https://example.com/q/test"},
+		} {
+			store := &memoryGroups{}
+			handler := New(Config{PublicURL: "http://localhost:8080"}, nil, store).Routes()
+			body, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := "/api/groups"
+			if method == "PUT" {
+				path += "/1"
+			}
+			r := httptest.NewRequest(method, path, strings.NewReader(string(body)))
+			r = r.WithContext(context.WithValue(r.Context(), userKey, User{ID: 1, CSRF: "csrf"}))
+			r.Header.Set("X-CSRF-Token", "csrf")
+			out := httptest.NewRecorder()
+			handler.ServeHTTP(out, r)
+			if out.Code != 400 || len(store.items) != 0 {
+				t.Fatalf("%s: invalid input reached storage: %d %s", method, out.Code, out.Body.String())
+			}
+		}
+	}
+}
