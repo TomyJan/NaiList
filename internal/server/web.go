@@ -23,7 +23,7 @@ func serveWeb(w http.ResponseWriter, r *http.Request, dir string) {
 		return
 	}
 	if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
-		http.Error(w, "前端未构建，请运行 npm run build", 503)
+		http.Error(w, "前端未构建，请运行 pnpm run build", 503)
 		return
 	}
 	http.ServeFile(w, r, filepath.Join(dir, "index.html"))

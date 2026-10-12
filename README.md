@@ -37,14 +37,14 @@ location / {
 
 ## 本地开发
 
-需要 Go 1.25+、Node.js 22+、PostgreSQL 16+。创建数据库并设置环境变量：`DATABASE_URL`、`PUBLIC_URL`、`QQ_APP_ID` 和 `QQ_APP_KEY`。从仓库根目录构建前端并启动后端：
+需要 Go 1.25+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并设置环境变量：`DATABASE_URL`、`PUBLIC_URL`、`QQ_APP_ID` 和 `QQ_APP_KEY`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
 
 ```sh
-cd web && npm ci && npm run build && cd ..
+cd web && pnpm install --frozen-lockfile && pnpm run build && cd ..
 go run ./cmd/server
 ```
 
-访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `npm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。`.env.example` 是配置参考，Go 程序直接读取进程环境变量。
+访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。`.env.example` 是配置参考，Go 程序直接读取进程环境变量。
 
 ## 功能与验证
 
@@ -53,14 +53,14 @@ go run ./cmd/server
 ```sh
 go test ./...
 go vet ./...
-cd web && npm test && npm run build
+cd web && pnpm test && pnpm run build
 ```
 
-数据库集成测试可设置专用测试库 `TEST_DATABASE_URL` 后运行 `go test ./internal/server -run TestPostgres -v`。浏览器测试需运行服务并安装 Chrome，设置 `TEST_APP_URL=http://localhost:8080` 后，在 `web` 目录执行 `npm run test:e2e`。
+数据库集成测试可设置专用测试库 `TEST_DATABASE_URL` 后运行 `go test ./internal/server -run TestPostgres -v`。浏览器测试需运行服务并安装 Chrome，设置 `TEST_APP_URL=http://localhost:8080` 后，在 `web` 目录执行 `pnpm run test:e2e`。
 
 ## 自动检查与发版
 
-Dependabot 自动更新 npm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供Linux x64 `binary-linux-amd64` 压缩包（含前端、配置示例和说明），保留 7 天；开发包名包含提交 SHA。普通 Build 只检查 Docker 构建，不推送镜像。
+Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供Linux x64 `binary-linux-amd64` 压缩包（含前端、配置示例和说明），保留 7 天；开发包名包含提交 SHA。普通 Build 只检查 Docker 构建，不推送镜像。
 
 发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；无标签时从 `web/package.json` 的 `0.1.0` 起算，首次默认发 `v0.1.1`。发版不修改前端私有包版本。
 

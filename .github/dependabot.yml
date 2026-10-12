@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # Dependabot 使用 npm 生态配置管理 pnpm-lock.yaml。
   - package-ecosystem: npm
     directory: /web
     schedule:
