@@ -155,7 +155,13 @@ export default function App() {
               navigate("/");
             }}
           >
-            <span className="brand-mark">奶</span>
+            <img
+              className="brand-mark"
+              src="/nailong.png"
+              alt=""
+              width="38"
+              height="38"
+            />
             <span>奶龙群列表</span>
           </a>
           <div className="nav-right">

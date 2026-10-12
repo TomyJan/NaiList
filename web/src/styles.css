@@ -87,13 +87,9 @@ p {
 .brand-mark {
   width: 38px;
   height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: #174a35;
-  color: #d9fca1;
-  font-weight: 800;
-  font-size: 21px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .nav-right {
   display: flex;
@@ -497,7 +493,6 @@ h1 {
   .brand-mark {
     width: 34px;
     height: 34px;
-    font-size: 19px;
   }
   .main {
     padding: 32px 20px 48px;
