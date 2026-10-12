@@ -81,6 +81,16 @@ func requestErrorLogged(r *http.Request) {
 func requestOperation(r *http.Request) (string, string) {
 	path := r.URL.Path
 	switch {
+	case path == "/api/admin/users" && r.Method == "GET":
+		return "admin.users.list", "获取全站账号与登录方式"
+	case path == "/api/admin/groups" && r.Method == "GET":
+		return "admin.groups.list", "获取全站奶群与归属"
+	case strings.HasPrefix(path, "/api/admin/users/") && strings.Contains(path, "/identities/"):
+		return "admin.identity.unbind", "管理员解绑登录方式"
+	case strings.HasPrefix(path, "/api/admin/users/"):
+		return "admin.user.delete", "管理员删除账号"
+	case strings.HasPrefix(path, "/api/admin/groups/"):
+		return "admin.group.update", "管理员更新奶群与归属"
 	case path == "/api/groups" && r.Method == "GET":
 		return "groups.list", "获取公开奶群列表"
 	case path == "/api/my/groups":
@@ -105,7 +115,7 @@ func requestOperation(r *http.Request) (string, string) {
 		return "auth.begin", "发起登录授权"
 	case path == "/api/health":
 		return "health.check", "检查服务与数据库健康"
-	case path == "/" || path == "/manage" || path == "/index.html":
+	case path == "/" || path == "/manage" || path == "/admin/users" || path == "/admin/groups" || path == "/index.html":
 		return "web.page", "加载应用页面"
 	case strings.HasPrefix(path, "/api/"):
 		return "http.unmatched", "访问未匹配接口"

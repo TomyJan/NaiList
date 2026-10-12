@@ -83,3 +83,7 @@ level=ERROR msg="服务启动失败，未进入可用状态" event=app.startup.f
 Docker 使用 `docker compose logs -f app`；裸跑可使用 `./nailist 2>>nailist.log`。轮转与持久化交给 Docker 日志驱动、systemd/journald 或现有采集器，应用不另设日志文件配置。
 
 不记录请求正文、Cookie、认证头、OAuth code/state/nonce/verifier、token、OpenID/UnionID/sub、SQL 参数/结果行、二维码图片或上游响应正文。密钥、URL 凭据/查询参数、嵌套敏感字段统一脱敏；群号、学校名、内部账号 ID 属于诊断业务字段，按部署方的日志权限和保留期限管理。
+
+## 站点管理审计
+
+管理员身份仍由请求的 `user_id` 标识，目标账号使用 `account_id`。用户列表和管理奶群查询在 DEBUG 记录读取范围与数量；权限、输入及约束拒绝记录明确原因。解绑、删除、群信息更新和归属转移仅在数据库提交后记录 INFO，包括目标账号、群 ID、登录方式、旧/新所有者与撤销数量等相关字段。DEBUG 补充账号锁、约束检查、会话撤销、事务提交/回滚阶段。OAuth 身份标识、会话令牌、密钥及完整群链接不进入日志。

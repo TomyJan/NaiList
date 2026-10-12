@@ -92,6 +92,10 @@ func run(ctx context.Context, output io.Writer) (err error) {
 		return errors.New("PORT 必须为 1～65535 的整数")
 	}
 	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY")}
+	cfg.AdminUserIDs, err = parseAdminUserIDs(os.Getenv("ADMIN_USER_IDS"))
+	if err != nil {
+		return err
+	}
 	cfg.Version = version
 	cfg.UmamiScriptURL = os.Getenv("UMAMI_SCRIPT_URL")
 	cfg.UmamiWebsiteID = os.Getenv("UMAMI_WEBSITE_ID")

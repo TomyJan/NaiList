@@ -74,8 +74,9 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, r, 200, struct {
 		User
+		IsAdmin    bool                `json:"isAdmin"`
 		Identities []accounts.Identity `json:"identities"`
-	}{user, identities})
+	}{user, s.cfg.AdminUserIDs[user.ID], identities})
 }
 func (s *Server) configured(id string) bool {
 	for _, p := range s.providers() {

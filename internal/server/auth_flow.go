@@ -226,7 +226,13 @@ func (s *Server) completeAuth(w http.ResponseWriter, r *http.Request, provider s
 		done("success", "session_still_live", "user_id", bindUserID)
 	}
 	done = authFlowStage(r, provider, intent, "account_resolve")
-	userID, err := (accounts.Store{DB: s.db}).Resolve(r.Context(), identity, bindUserID, s.cfg.QQUseUnionID)
+	session := ""
+	resolvedSession := accounts.Session{BindingSessionHash: sessionHash}
+	if bindUserID == 0 {
+		session = randomToken()
+		resolvedSession.TokenHash, resolvedSession.CSRFToken = hashToken(session), randomToken()
+	}
+	userID, err := (accounts.Store{DB: s.db}).ResolveAuthenticated(r.Context(), identity, bindUserID, s.cfg.QQUseUnionID, resolvedSession)
 	if err != nil {
 		if errors.Is(err, accounts.ErrConflict) {
 			done("rejected", "identity_conflict")
@@ -234,6 +240,9 @@ func (s *Server) completeAuth(w http.ResponseWriter, r *http.Request, provider s
 		} else if errors.Is(err, accounts.ErrAlreadyBound) {
 			done("rejected", "already_bound")
 			fail("already_bound", "account_resolve", nil)
+		} else if errors.Is(err, accounts.ErrIdentityRevoked) || errors.Is(err, accounts.ErrSessionRevoked) {
+			done("rejected", "authorization_revoked")
+			fail("session_changed", "account_resolve", nil)
 		} else {
 			done("failed", "account_resolution_failed")
 			fail("failed", "account_resolve", err)
@@ -248,13 +257,7 @@ func (s *Server) completeAuth(w http.ResponseWriter, r *http.Request, provider s
 		http.Redirect(w, r, "/manage?bound=1", http.StatusSeeOther)
 		return
 	}
-	session := randomToken()
 	done = authFlowStage(r, provider, intent, "session_create")
-	if _, err = s.db.Exec(logging.WithOperation(r.Context(), "session.create"), `INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '7 days')`, hashToken(session), userID, randomToken()); err != nil {
-		done("failed", "database_write_failed")
-		fail("failed", "session_create", err)
-		return
-	}
 	done("success", "session_created", "user_id", userID, "ttl_seconds", 7*24*3600)
 	done = authFlowStage(r, provider, intent, "session_cleanup")
 	result, err := s.db.Exec(logging.WithOperation(r.Context(), "session.cleanup"), `DELETE FROM sessions WHERE expires_at<now()`)

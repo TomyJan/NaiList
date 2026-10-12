@@ -24,6 +24,7 @@ type Config struct {
 	Version, UmamiScriptURL, UmamiWebsiteID string
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig
+	AdminUserIDs                            map[int64]bool
 }
 type User struct {
 	ID        int64  `json:"id"`
@@ -63,6 +64,19 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/groups", s.list)
 	r.Get("/api/me", s.me)
 	r.Get("/api/auth/providers", s.authProviders)
+	r.Route("/api/admin", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Use(s.requireAdmin)
+		r.Get("/users", s.adminUsers)
+		r.Get("/groups", s.adminGroups)
+		r.Group(func(r chi.Router) {
+			r.Use(s.protectWrite)
+			r.Use(middleware.Throttle(32))
+			r.Delete("/users/{id}/identities/{provider}", s.adminUnbind)
+			r.Delete("/users/{id}", s.adminDeleteUser)
+			r.Put("/groups/{id}", s.adminSaveGroup)
+		})
+	})
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)

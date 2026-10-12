@@ -15,6 +15,12 @@ import (
 
 var ErrConflict = errors.New("此登录身份已绑定其他账号")
 var ErrAlreadyBound = errors.New("此账号已绑定该登录方式")
+var ErrIdentityRevoked = errors.New("登录身份已撤销，请重新登录")
+var ErrSessionRevoked = errors.New("绑定会话已撤销，请重新登录")
+
+// Session is persisted in the same transaction as account resolution. Binding
+// uses its initiating session instead of issuing a new one.
+type Session struct{ TokenHash, CSRFToken, BindingSessionHash string }
 
 type Identity struct {
 	ProviderID string `json:"providerId"`
@@ -48,6 +54,14 @@ func (s Store) List(ctx context.Context, userID int64) ([]Identity, error) {
 
 // Resolve keeps accounts independent from providers. Binding never merges accounts.
 func (s Store) Resolve(ctx context.Context, identity Identity, bindUserID int64, useUnionID bool) (resolvedID int64, resolveErr error) {
+	return s.resolve(ctx, identity, bindUserID, useUnionID, nil)
+}
+
+func (s Store) ResolveAuthenticated(ctx context.Context, identity Identity, bindUserID int64, useUnionID bool, session Session) (int64, error) {
+	return s.resolve(ctx, identity, bindUserID, useUnionID, &session)
+}
+
+func (s Store) resolve(ctx context.Context, identity Identity, bindUserID int64, useUnionID bool, session *Session) (resolvedID int64, resolveErr error) {
 	started := time.Now()
 	ctx = logging.WithOperation(ctx, "account.resolve")
 	intent := "login"
@@ -69,6 +83,9 @@ func (s Store) Resolve(ctx context.Context, identity Identity, bindUserID int64,
 			}
 			if errors.Is(resolveErr, ErrAlreadyBound) {
 				outcome, reason = "rejected", "already_bound"
+			}
+			if errors.Is(resolveErr, ErrIdentityRevoked) || errors.Is(resolveErr, ErrSessionRevoked) {
+				outcome, reason = "rejected", "authorization_revoked"
 			}
 		}
 		logger.DebugContext(ctx, "账号解析结束", "event", "account.resolve.completed", "stage", "resolve", "outcome", outcome, "reason", reason, "account_id", resolvedID, "created_or_existing", createdOrExisting, "duration_ms", logging.DurationMS(started))
@@ -119,7 +136,20 @@ func (s Store) Resolve(ctx context.Context, identity Identity, bindUserID int64,
 	if bindUserID != 0 {
 		var id int64
 		if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, bindUserID).Scan(&id); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return 0, ErrSessionRevoked
+			}
 			return 0, fmt.Errorf("lock binding account: %w", err)
+		}
+		if session != nil {
+			var hash string
+			err = tx.QueryRow(ctx, `SELECT token_hash FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>statement_timestamp() FOR SHARE`, session.BindingSessionHash, bindUserID).Scan(&hash)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return 0, ErrSessionRevoked
+			}
+			if err != nil {
+				return 0, fmt.Errorf("check binding session in transaction: %w", err)
+			}
 		}
 	}
 	debug("lock", "success", "locks_acquired", "已获取账号解析所需事务锁", "lock_count", len(locks))
@@ -153,6 +183,25 @@ func (s Store) Resolve(ctx context.Context, identity Identity, bindUserID int64,
 		return 0, fmt.Errorf("iterate matching identities: %w", err)
 	}
 	debug("identity_lookup", "success", "lookup_completed", "登录身份查询结束", "matched", identityID != 0)
+	if bindUserID == 0 && userID != 0 {
+		var lockedID int64
+		if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&lockedID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return 0, ErrIdentityRevoked
+			}
+			return 0, fmt.Errorf("lock login account: %w", err)
+		}
+		// An administrator may have revoked the identity while this transaction
+		// waited for the user lock. Never restore that identity or old session.
+		var live bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM identities WHERE id=$1 AND user_id=$2)`, identityID, userID).Scan(&live); err != nil {
+			return 0, err
+		}
+		if !live {
+			return 0, ErrIdentityRevoked
+		}
+		debug("lock", "success", "login_account_locked", "已锁定登录账号并确认身份仍有效", "account_id", userID)
+	}
 	if bindUserID != 0 && userID != 0 && userID != bindUserID {
 		return 0, ErrConflict
 	}
@@ -199,6 +248,15 @@ func (s Store) Resolve(ctx context.Context, identity Identity, bindUserID int64,
 		}
 	}
 	debug("commit", "started", "", "准备提交账号解析事务", "account_id", userID)
+	if session != nil && bindUserID == 0 {
+		if session.TokenHash == "" || session.CSRFToken == "" {
+			return 0, errors.New("登录会话不完整")
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '7 days')`, session.TokenHash, userID, session.CSRFToken); err != nil {
+			return 0, fmt.Errorf("create resolved account session: %w", err)
+		}
+		debug("session", "success", "session_saved", "已将登录会话写入账号事务", "account_id", userID)
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit account resolution: %w", err)
 	}

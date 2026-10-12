@@ -52,6 +52,9 @@ func (s Store) Save(ctx context.Context, owner, id int64, g Group) (Group, error
 	if errors.As(err, &pe) && pe.Code == "23505" {
 		return g, ErrDuplicate
 	}
+	if errors.As(err, &pe) && pe.Code == "23503" && pe.ConstraintName == "groups_owner_id_fkey" {
+		return g, ErrNotFound
+	}
 	g.OwnerID = owner
 	if err != nil {
 		return g, fmt.Errorf("保存奶群数据库记录 (%s): %w", operation, err)
