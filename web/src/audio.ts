@@ -21,6 +21,7 @@ export class NailongAudioPlayer {
   private urls: string[] = [];
   private disposed = false;
   private loaded = false;
+  private playback = 0;
 
   constructor(
     private readonly onReady?: () => void,
@@ -90,13 +91,16 @@ export class NailongAudioPlayer {
 
   play() {
     if (this.disposed || !this.urls.length) return;
+    const playback = ++this.playback;
     const url = this.urls[Math.floor(Math.random() * this.urls.length)];
     this.audio.pause();
     this.audio.src = this.cached.get(url) ?? url;
     this.audio.currentTime = 0;
     this.audio.volume = 0.36;
     void this.audio.play().catch(() => {
-      this.report("奶龙音频播放失败，请稍后重试");
+      // Switching tracks intentionally cancels the previous pending play().
+      if (playback === this.playback)
+        this.report("奶龙音频播放失败，请稍后重试");
     });
   }
 

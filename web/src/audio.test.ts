@@ -145,8 +145,43 @@ describe("奶龙音频", () => {
     player.play();
     await Promise.resolve();
     expect(audio.play).toHaveBeenCalledTimes(2);
-    expect(error).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith("奶龙音频播放失败，请稍后重试");
+    player.dispose();
+  });
+
+  it("快速切换忽略上次播放的迟到失败，当前播放失败仍提示", async () => {
+    fetchMock
+      .mockResolvedValueOnce(indexResponse())
+      .mockImplementation(async () => audioResponse());
+    const error = vi.fn();
+    const player = new NailongAudioPlayer(undefined, error);
+    await player.load();
+    let rejectPrevious!: (reason: Error) => void;
+    let rejectCurrent!: (reason: Error) => void;
+    audio.play
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectPrevious = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectCurrent = reject;
+          }),
+      );
+    player.play();
+    player.play();
+    rejectPrevious(new DOMException("interrupted by pause", "AbortError"));
+    await Promise.resolve();
+    expect(error).not.toHaveBeenCalled();
+    rejectCurrent(new Error("unsupported audio"));
+    await Promise.resolve();
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      "奶龙音频播放失败，请稍后重试",
+    );
     player.dispose();
   });
 
