@@ -22,7 +22,10 @@ export class NailongAudioPlayer {
   private disposed = false;
   private loaded = false;
 
-  constructor(private readonly onReady?: () => void) {
+  constructor(
+    private readonly onReady?: () => void,
+    private readonly onError?: (message: string) => void,
+  ) {
     this.audio.volume = 0.36;
     this.audio.preload = "auto";
   }
@@ -35,19 +38,29 @@ export class NailongAudioPlayer {
       const response = await fetch(AUDIO_INDEX_URL, {
         signal: controller.signal,
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        this.report("奶龙音频加载失败，请稍后重试");
+        return;
+      }
       const index = (await response.json()) as AudioIndex;
       const values = Array.isArray(index.audio) ? index.audio : [];
       this.urls = [...new Set(values.filter(validAudioURL))];
-      if (!this.urls.length || this.disposed) return;
+      if (!this.urls.length || this.disposed) {
+        if (!this.disposed) this.report("奶龙音频加载失败，请稍后重试");
+        return;
+      }
       this.loaded = true;
       this.onReady?.();
       await this.preload();
     } catch {
-      // Audio is optional and must never affect the page.
+      if (!this.disposed) this.report("奶龙音频加载失败，请稍后重试");
     } finally {
       this.controllers.delete(controller);
     }
+  }
+
+  private report(message: string) {
+    if (!this.disposed) this.onError?.(message);
   }
 
   private async preload() {
@@ -82,7 +95,9 @@ export class NailongAudioPlayer {
     this.audio.src = this.cached.get(url) ?? url;
     this.audio.currentTime = 0;
     this.audio.volume = 0.36;
-    void this.audio.play().catch(() => undefined);
+    void this.audio.play().catch(() => {
+      this.report("奶龙音频播放失败，请稍后重试");
+    });
   }
 
   dispose() {

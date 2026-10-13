@@ -1,12 +1,16 @@
 import { Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AUDIO_INDEX_URL, NailongAudioPlayer } from "./audio";
+import { notify } from "./notifications";
 
 export function AudioButton() {
   const [ready, setReady] = useState(false);
   const player = useRef<NailongAudioPlayer | null>(null);
   useEffect(() => {
-    const instance = new NailongAudioPlayer(() => setReady(true));
+    const instance = new NailongAudioPlayer(
+      () => setReady(true),
+      (message) => notify.error(message),
+    );
     player.current = instance;
     const idle =
       window.requestIdleCallback?.(() => void instance.load()) ??

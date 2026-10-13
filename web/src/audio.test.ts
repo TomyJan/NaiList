@@ -57,7 +57,8 @@ describe("奶龙音频", () => {
       .mockResolvedValueOnce(indexResponse())
       .mockImplementation(async () => audioResponse());
     const ready = vi.fn();
-    const player = new NailongAudioPlayer(ready);
+    const error = vi.fn();
+    const player = new NailongAudioPlayer(ready, error);
     await player.load();
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls[0][0]).toBe(AUDIO_INDEX_URL);
@@ -74,6 +75,7 @@ describe("奶龙音频", () => {
     expect(audio.currentTime).toBe(0);
     expect(audio.pause).toHaveBeenCalledTimes(2);
     expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(error).not.toHaveBeenCalled();
     player.dispose();
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(3);
   });
@@ -107,13 +109,15 @@ describe("奶龙音频", () => {
     new Response("invalid JSON"),
     indexResponse("invalid"),
     indexResponse([]),
-  ])("索引错误或为空时静默结束", async (response) => {
+  ])("索引错误或为空时提示加载失败", async (response) => {
     fetchMock.mockResolvedValueOnce(response);
     const ready = vi.fn();
-    const player = new NailongAudioPlayer(ready);
+    const error = vi.fn();
+    const player = new NailongAudioPlayer(ready, error);
     await expect(player.load()).resolves.toBeUndefined();
     player.play();
     expect(ready).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith("奶龙音频加载失败，请稍后重试");
     expect(audio.play).not.toHaveBeenCalled();
     player.dispose();
   });
@@ -133,13 +137,16 @@ describe("奶龙音频", () => {
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(audioResponse());
     audio.play.mockRejectedValue(new Error("not supported"));
-    const player = new NailongAudioPlayer();
+    const error = vi.fn();
+    const player = new NailongAudioPlayer(undefined, error);
     await expect(player.load()).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     player.play();
     player.play();
     await Promise.resolve();
     expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledWith("奶龙音频播放失败，请稍后重试");
     player.dispose();
   });
 
