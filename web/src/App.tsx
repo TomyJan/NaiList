@@ -72,8 +72,8 @@ export default function App() {
   }, []);
   // 供 CSS 区分页面：主页显示奶蛙背景，管理页不显示。
   useEffect(() => {
-    document.documentElement.dataset.page = manage ? "manage" : "home";
-  }, [manage]);
+    document.documentElement.dataset.page = path === "/" ? "home" : "manage";
+  }, [path]);
   useEffect(() => {
     const controller = new AbortController();
     api<User | null>("/api/me", { signal: controller.signal })

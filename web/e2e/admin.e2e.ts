@@ -462,3 +462,39 @@ test("概览刷新期间避免重复请求，会话失效后清除统计", async
   await expect(page.getByText("登录后访问站点管理")).toBeVisible();
   await expect(page.locator(".stat-card")).toHaveCount(0);
 });
+
+test("仅首页显示主页背景，管理路由直达和前进后退正确更新标记", async ({
+  page,
+}) => {
+  await setup(page);
+  for (const path of [
+    "/admin",
+    "/admin/",
+    "/admin/users",
+    "/admin/groups",
+    "/manage",
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("html")).not.toHaveAttribute("data-page", "home");
+    expect(
+      await page.evaluate(
+        () => getComputedStyle(document.body, "::before").backgroundImage,
+      ),
+    ).toBe("none");
+  }
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-page", "home");
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.body, "::before").backgroundImage,
+    ),
+  ).toContain("naiwa.png");
+  await page.getByRole("button", { name: "账户菜单" }).click();
+  await page.getByRole("menuitem", { name: "站点管理" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.locator("html")).not.toHaveAttribute("data-page", "home");
+  await page.goBack();
+  await expect(page.locator("html")).toHaveAttribute("data-page", "home");
+  await page.goForward();
+  await expect(page.locator("html")).not.toHaveAttribute("data-page", "home");
+});
