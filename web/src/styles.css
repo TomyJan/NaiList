@@ -48,6 +48,60 @@ body {
 .footer p {
   margin-top: 4px;
 }
+.traffic-stats,
+.traffic-group,
+.traffic-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.traffic-stats {
+  margin-top: 8px;
+  gap: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.traffic-group {
+  gap: 4px 6px;
+}
+.traffic-group > span {
+  white-space: nowrap;
+}
+.traffic-refresh {
+  color: inherit;
+  gap: 4px;
+  padding: 2px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: inherit;
+  line-height: inherit;
+}
+.traffic-refresh:hover {
+  color: #8a6500;
+  text-decoration: underline;
+}
+.traffic-refresh:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.traffic-refresh:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+@media (max-width: 600px) {
+  .traffic-stats {
+    flex-direction: column;
+  }
+  .traffic-divider {
+    display: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .traffic-refresh:hover {
+    color: #e8d9a0;
+  }
+}
 button,
 input,
 a {

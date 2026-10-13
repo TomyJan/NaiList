@@ -7,7 +7,8 @@ import type { ListKind } from "./ListTabs";
 import { AccountBindings, LoginDialog } from "./Account";
 import { Admin } from "./Admin";
 import { Notifications, notify } from "./notifications";
-import { SITE_VERSION } from "./runtime";
+import { SITE_VERSION, TRAFFIC_ENABLED } from "./runtime";
+import { TrafficStats } from "./TrafficStats";
 import type { User, LoginProvider } from "./types";
 
 export default function App() {
@@ -319,6 +320,7 @@ export default function App() {
           </a>
         </div>
         <p>反馈支持请搜索加入 兰理工 群</p>
+        {TRAFFIC_ENABLED && <TrafficStats />}
       </footer>
       {loginDialog && (
         <LoginDialog
