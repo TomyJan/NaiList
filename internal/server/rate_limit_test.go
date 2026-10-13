@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -80,39 +79,5 @@ func TestRateLimiterSustainedWrites(t *testing.T) {
 	now = now.Add(time.Hour)
 	if l.allow(rateRule{"minute", 30, time.Minute}, rateRule{"hour", 200, time.Hour}) != 0 {
 		t.Fatal("hourly limit did not recover")
-	}
-}
-
-func TestTrustedProxyClientIP(t *testing.T) {
-	trusted, err := ParseTrustedProxyCIDRs("127.0.0.1/32,10.1.2.3/32,2001:db8::1/128")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &Server{cfg: Config{TrustedProxyCIDRs: trusted}}
-	for _, tc := range []struct{ peer, forwarded, want string }{
-		{"192.0.2.1:80", "198.51.100.1", "192.0.2.1"},
-		{"127.0.0.1:80", "198.51.100.1", "198.51.100.1"},
-		{"127.0.0.1:80", "198.51.100.2, 10.1.2.3", "198.51.100.2"},
-		{"127.0.0.1:80", "198.51.100.2, 10.1.2.4", "10.1.2.4"},
-		{"127.0.0.1:80", "garbage, 10.1.2.3", "127.0.0.1"},
-		{"127.0.0.1:80", "198.51.100.1:90", "127.0.0.1"},
-		{"[2001:db8::1]:80", "2001:db8::2", "2001:db8::2"},
-		{"[::ffff:192.0.2.1]:80", "198.51.100.1", "192.0.2.1"},
-		{"127.0.0.1:80", "", "127.0.0.1"},
-	} {
-		t.Run(tc.peer+tc.forwarded, func(t *testing.T) {
-			r := httptest.NewRequest("GET", "/", nil)
-			r.RemoteAddr = tc.peer
-			r.Header.Set("X-Forwarded-For", tc.forwarded)
-			r.Header.Set("X-Real-IP", "203.0.113.1")
-			if got := s.clientIP(r); got != tc.want {
-				t.Fatalf("got %s want %s", got, tc.want)
-			}
-		})
-	}
-	for _, bad := range []string{"127.0.0.1", "0.0.0.0/no", "127.0.0.1/32,", "::ffff:127.0.0.1/128"} {
-		if _, err := ParseTrustedProxyCIDRs(bad); err == nil {
-			t.Fatalf("invalid CIDR accepted: %s", bad)
-		}
 	}
 }

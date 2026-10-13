@@ -63,7 +63,7 @@
 
 ## 排查方法
 
-`security.rate_limited` 为 WARN，包含 `scope`（`auth_start` / `auth_callback` / `user_write`）及 `retry_after_seconds`；限额与可信代理配置见 README。`peer_ip` 始终是 TCP 对端，不会被转发头覆盖。`resources.quota.checked` 为 DEBUG，记录锁内核对的所属账号、有效 / 含历史条数及上限；达到上传配额时业务拒绝为 WARN，`reason=resource_quota_exceeded`，不视为数据库故障。
+`security.rate_limited` 为 WARN，包含 `scope`（`auth_start` / `auth_callback` / `user_write`）及 `retry_after_seconds`；限额与 `CLIENT_IP_HEADER` 配置见 README。`peer_ip` 始终是 TCP 对端，不会被转发头覆盖。启动 DEBUG 事件 `http.server.configured` 记录选用的 IP 请求头（空表示 TCP 对端）。`resources.quota.checked` 为 DEBUG，记录锁内核对的所属账号、有效 / 含历史条数及上限；达到上传配额时业务拒绝为 WARN，`reason=resource_quota_exceeded`，不视为数据库故障。
 
 启动失败先找 `app.startup.failed` 的 `stage` 和 `hint`：`http_bind` 查端口占用/监听权限，`database_connect` 查目标/凭据/TLS/网络，`database_migrate` 查建表权限与迁移锁。启动未出现 `app.ready` 表示尚未就绪。
 

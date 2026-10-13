@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 type rateRule struct {
@@ -75,19 +77,12 @@ func (l *requestLimiter) allow(rules ...rateRule) time.Duration {
 	return 0
 }
 
-func ParseTrustedProxyCIDRs(value string) ([]netip.Prefix, error) {
-	var out []netip.Prefix
-	if strings.TrimSpace(value) == "" {
-		return out, nil
+func ParseClientIPHeader(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value != "" && !httpguts.ValidHeaderFieldName(value) {
+		return "", errors.New("CLIENT_IP_HEADER 必须为单个合法 HTTP 请求头名称")
 	}
-	for _, entry := range strings.Split(value, ",") {
-		prefix, err := netip.ParsePrefix(strings.TrimSpace(entry))
-		if err != nil || prefix.Addr().Is4In6() {
-			return nil, errors.New("TRUSTED_PROXY_CIDRS 必须为逗号分隔的 IPv4 / IPv6 CIDR")
-		}
-		out = append(out, prefix.Masked())
-	}
-	return out, nil
+	return http.CanonicalHeaderKey(value), nil
 }
 
 func (s *Server) clientIP(r *http.Request) string {
@@ -100,41 +95,21 @@ func (s *Server) clientIP(r *http.Request) string {
 		return "unknown"
 	}
 	peer = peer.Unmap()
-	trusted := func(ip netip.Addr) bool {
-		for _, p := range s.cfg.TrustedProxyCIDRs {
-			if p.Contains(ip) {
-				return true
-			}
-		}
-		return false
-	}
-	if !trusted(peer) {
+	if s.cfg.ClientIPHeader == "" {
 		return peer.String()
 	}
-	forwarded := r.Header.Values("X-Forwarded-For")
-	chain := strings.Join(forwarded, ",")
-	if chain == "" || len(chain) > 2048 {
+	value := strings.Join(r.Header.Values(s.cfg.ClientIPHeader), ",")
+	if value == "" || len(value) > 2048 {
 		return peer.String()
 	}
-	parts := strings.Split(chain, ",")
-	if len(parts) > 32 {
+	if strings.EqualFold(s.cfg.ClientIPHeader, "X-Forwarded-For") {
+		value, _, _ = strings.Cut(value, ",")
+	}
+	ip, err := netip.ParseAddr(strings.TrimSpace(value))
+	if err != nil || ip.Zone() != "" {
 		return peer.String()
 	}
-	ips := make([]netip.Addr, len(parts))
-	for i, part := range parts {
-		ip, err := netip.ParseAddr(strings.TrimSpace(part))
-		if err != nil || ip.Zone() != "" {
-			return peer.String()
-		}
-		ips[i] = ip.Unmap()
-	}
-	for i := len(ips) - 1; i >= 0; i-- {
-		peer = ips[i]
-		if !trusted(peer) {
-			break
-		}
-	}
-	return peer.String()
+	return ip.Unmap().String()
 }
 
 func (s *Server) authRateLimit(next http.Handler) http.Handler {

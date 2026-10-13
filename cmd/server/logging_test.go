@@ -20,7 +20,7 @@ import (
 func startupTest(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"LOG_LEVEL", "QQ_APP_ID", "QQ_APP_KEY", "QQ_USE_UNIONID", "OIDC_ID", "OIDC_NAME", "OIDC_ICON", "OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_SCOPES", "UMAMI_SCRIPT_URL", "UMAMI_WEBSITE_ID"} {
+	for _, key := range []string{"LOG_LEVEL", "CLIENT_IP_HEADER", "QQ_APP_ID", "QQ_APP_KEY", "QQ_USE_UNIONID", "OIDC_ID", "OIDC_NAME", "OIDC_ICON", "OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_SCOPES", "UMAMI_SCRIPT_URL", "UMAMI_WEBSITE_ID"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("DATABASE_URL", "postgres://user:db-secret@127.0.0.1:1/nailist?sslmode=disable&connect_timeout=1")
@@ -35,6 +35,7 @@ func TestStartupFailuresAreLogged(t *testing.T) {
 	for _, tc := range []struct{ name, key, value, stage string }{
 		{"missing database", "DATABASE_URL", "", "config"},
 		{"invalid port", "PORT", "invalid", "config"},
+		{"invalid client IP header", "CLIENT_IP_HEADER", "invalid header", "config"},
 		{"invalid log level", "LOG_LEVEL", "invalid", "logging_config"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

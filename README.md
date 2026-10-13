@@ -65,14 +65,14 @@ location / {
     proxy_pass http://127.0.0.1:8080;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
 
 在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose pull && docker compose up -d`。升级前备份外部 PostgreSQL 数据库，备份与恢复由数据库管理工具执行。
 
-代理部署须在 `.env` 配置 `TRUSTED_PROXY_CIDRS` 为程序实际看到的反向代理出口 CIDR。直接在宿主机运行且 Nginx 通过 loopback 连接时，可填 `127.0.0.1/32,::1/128`；Docker 桥接网络通常看到网关地址，须核实后只信任该地址，不要直接信任全部私有网段。使用 CDN 时同时配置链路中真实可信的代理网段，并在源站限制直接访问。程序从右向左解析 `X-Forwarded-For`，仅跳过已配置的代理；留空时只按 TCP 对端限流，忽略转发头和 `X-Real-IP`。无效 CIDR 会拒绝启动。
+代理 / CDN 部署在 `.env` 设置 `CLIENT_IP_HEADER` 为传递访客 IP 的请求头，例如 `X-Forwarded-For`、`CF-Connecting-IP` 或 `X-Real-IP`，无需配置回源网段。程序只读取指定头；`X-Forwarded-For` 取第一个 IP，其他头须为单个 IP。留空使用 TCP 对端；请求头缺失、格式错误或过长时回退 TCP 对端，无效头名配置会拒绝启动。代理应覆盖该头以传递真实访客 IP，源站应通过代理访问。上面的 Nginx 示例适用于直接面向访客；前面还有 CDN 时，须保留 CDN 提供的真实 IP 头并配置对应名称。旧配置 `TRUSTED_PROXY_CIDRS` 已移除，请替换为 `CLIENT_IP_HEADER`。
 
 ## 请求与上传限制
 

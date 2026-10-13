@@ -16,7 +16,6 @@ import (
 	"nailist/internal/sites"
 	"nailist/internal/traffic"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ type Config struct {
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig
 	AdminUserIDs                            map[int64]bool
-	TrustedProxyCIDRs                       []netip.Prefix
+	ClientIPHeader                          string
 }
 type User struct {
 	ID        int64  `json:"id"`
