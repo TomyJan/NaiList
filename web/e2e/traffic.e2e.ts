@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, AUDIO_BASE_URL } from "./fixtures";
 
 async function setup(page: Page, enabled = true) {
   await page.route("http://umami.test/**", (route) =>
@@ -76,7 +76,11 @@ test("页脚汇总、手动刷新、禁止重复刷新和手机布局", async ({
   await expect(footer).toContainText("当前在线 67");
   await expect(refresh).toBeEnabled();
   expect(
-    requested.filter((url) => !url.startsWith(new URL(page.url()).origin)),
+    requested.filter(
+      (url) =>
+        new URL(url).origin !== new URL(page.url()).origin &&
+        !url.startsWith(AUDIO_BASE_URL),
+    ),
   ).toEqual([]);
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });

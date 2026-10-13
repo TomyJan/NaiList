@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 
 const identities = [
   { providerId: "qq", nickname: "QQ昵称", avatarUrl: "" },
