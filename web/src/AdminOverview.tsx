@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Building2,
-  Globe,
-  List,
-  RefreshCw,
-  UserRoundCheck,
-  Users,
-} from "lucide-react";
+import { Building2, Globe, List, UserRoundCheck, Users } from "lucide-react";
 import { api, ApiError } from "./api";
 import { notify } from "./notifications";
+import { RefreshIcon } from "./motion";
 import type { AdminStats } from "./types";
 
 export function AdminOverview({
@@ -92,11 +86,7 @@ export function AdminOverview({
           disabled={loading}
           onClick={() => setRevision((v) => v + 1)}
         >
-          <RefreshCw
-            size={16}
-            aria-hidden="true"
-            className={loading ? "refresh-spinning" : undefined}
-          />
+          <RefreshIcon size={16} active={loading} cycle={revision} />
           刷新统计
         </button>
       </div>

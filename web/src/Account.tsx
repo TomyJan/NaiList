@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { MotionDialog, Presence } from "./motion";
 import { Check, LogIn, ShieldCheck, X } from "lucide-react";
 import { api, ApiError, writeOptions } from "./api";
 import { notify } from "./notifications";
@@ -34,13 +35,8 @@ export function LoginDialog({
   onRetry: () => Promise<void>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, []);
   return (
-    <dialog
+    <MotionDialog
       ref={ref}
       className="modal login-modal"
       aria-labelledby="login-title"
@@ -77,7 +73,7 @@ export function LoginDialog({
           ))}
         </div>
       )}
-    </dialog>
+    </MotionDialog>
   );
 }
 
@@ -106,12 +102,6 @@ export function AccountBindings({
         loginUrl: "",
       });
   }
-  useEffect(() => {
-    if (!pending) return;
-    const dialog = ref.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, [pending]);
   const bind = async () => {
     if (!pending) return;
     setBusy(true);
@@ -174,42 +164,44 @@ export function AccountBindings({
           );
         })}
       </div>
-      {pending && (
-        <dialog
-          ref={ref}
-          className="modal"
-          aria-labelledby="bind-title"
-          onCancel={(e) => {
-            if (busy) e.preventDefault();
-            else setPending(null);
-          }}
-        >
-          <div className="modal-head">
-            <h2 id="bind-title">绑定 {pending.name}</h2>
-            <button
-              className="icon-button"
-              aria-label="关闭"
-              disabled={busy}
-              onClick={() => setPending(null)}
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <p>绑定后可用于登录，不可解绑。</p>
-          <div className="modal-actions">
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() => setPending(null)}
-            >
-              取消
-            </button>
-            <button className="primary" disabled={busy} onClick={bind}>
-              {busy ? "跳转中" : "继续绑定"}
-            </button>
-          </div>
-        </dialog>
-      )}
+      <Presence visible={!!pending}>
+        {pending && (
+          <MotionDialog
+            ref={ref}
+            className="modal"
+            aria-labelledby="bind-title"
+            onCancel={(e) => {
+              if (busy) e.preventDefault();
+              else setPending(null);
+            }}
+          >
+            <div className="modal-head">
+              <h2 id="bind-title">绑定 {pending.name}</h2>
+              <button
+                className="icon-button"
+                aria-label="关闭"
+                disabled={busy}
+                onClick={() => setPending(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p>绑定后可用于登录，不可解绑。</p>
+            <div className="modal-actions">
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => setPending(null)}
+              >
+                取消
+              </button>
+              <button className="primary" disabled={busy} onClick={bind}>
+                {busy ? "跳转中" : "继续绑定"}
+              </button>
+            </div>
+          </MotionDialog>
+        )}
+      </Presence>
     </section>
   );
 }

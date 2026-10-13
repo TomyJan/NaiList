@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MotionDialog, Presence, TabIndicator } from "./motion";
 import {
   ChartNoAxesCombined,
   Globe,
@@ -233,6 +234,7 @@ export function Admin({
                   : "奶站管理"}
           </a>
         ))}
+        <TabIndicator value={page} scope="admin" />
       </nav>
       {!authLoaded ? (
         <div className="empty">加载登录状态中</div>
@@ -461,33 +463,39 @@ export function Admin({
           )}
         </>
       )}
-      {editor && user?.isAdmin && (
-        <GroupForm
-          key={editor.id}
-          accountID={user.id}
-          group={editor}
-          ownership={{ users, ownerId: editor.ownerId }}
-          onClose={() => setEditor(null)}
-          onSave={save}
-        />
-      )}
-      {siteEditor && user?.isAdmin && (
-        <SiteForm
-          key={siteEditor.id}
-          accountID={user.id}
-          site={siteEditor}
-          ownership={{ users, ownerId: siteEditor.ownerId }}
-          onClose={() => setSiteEditor(null)}
-          onSave={saveSite}
-        />
-      )}
-      {pending && user?.isAdmin && (
-        <AdminConfirmation
-          action={pending}
-          onClose={() => setPending(null)}
-          onConfirm={confirm}
-        />
-      )}
+      <Presence visible={!!editor && !!user?.isAdmin}>
+        {editor && user?.isAdmin && (
+          <GroupForm
+            key={editor.id}
+            accountID={user.id}
+            group={editor}
+            ownership={{ users, ownerId: editor.ownerId }}
+            onClose={() => setEditor(null)}
+            onSave={save}
+          />
+        )}
+      </Presence>
+      <Presence visible={!!siteEditor && !!user?.isAdmin}>
+        {siteEditor && user?.isAdmin && (
+          <SiteForm
+            key={siteEditor.id}
+            accountID={user.id}
+            site={siteEditor}
+            ownership={{ users, ownerId: siteEditor.ownerId }}
+            onClose={() => setSiteEditor(null)}
+            onSave={saveSite}
+          />
+        )}
+      </Presence>
+      <Presence visible={!!pending && !!user?.isAdmin}>
+        {pending && user?.isAdmin && (
+          <AdminConfirmation
+            action={pending}
+            onClose={() => setPending(null)}
+            onConfirm={confirm}
+          />
+        )}
+      </Presence>
     </>
   );
 }
@@ -505,16 +513,13 @@ function AdminConfirmation({
   const mounted = useRef(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const dialog = ref.current!;
     mounted.current = true;
-    dialog.showModal();
     return () => {
       mounted.current = false;
-      dialog.close();
     };
   }, []);
   return (
-    <dialog
+    <MotionDialog
       ref={ref}
       className="modal delete-modal"
       aria-labelledby="admin-confirm-title"
@@ -558,6 +563,6 @@ function AdminConfirmation({
           {busy ? "处理中…" : action.providerId ? "确认解除" : "确认删除"}
         </button>
       </div>
-    </dialog>
+    </MotionDialog>
   );
 }

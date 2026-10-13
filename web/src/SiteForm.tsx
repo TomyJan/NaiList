@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MotionDialog } from "./motion";
 import { Undo2, X } from "lucide-react";
 import { normalizeDomain, validateSiteInput } from "./site-input";
 import { readSiteDraft, writeSiteDraft, type SiteDraft } from "./site-drafts";
@@ -39,17 +40,14 @@ export function SiteForm({
   }, [accountID, site?.id, input, scope]);
   useEffect(() => {
     mounted.current = true;
-    const dialog = ref.current!;
-    dialog.showModal();
     return () => {
       mounted.current = false;
-      dialog.close();
     };
   }, []);
   const field = (key: keyof SiteInput, value: string) =>
     setInput((current) => ({ ...current, [key]: value }));
   return (
-    <dialog
+    <MotionDialog
       ref={ref}
       className="modal"
       aria-labelledby="site-form-title"
@@ -231,6 +229,6 @@ export function SiteForm({
           </button>
         </div>
       </form>
-    </dialog>
+    </MotionDialog>
   );
 }

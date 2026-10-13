@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshIcon } from "./motion";
 import { api } from "./api";
 import { notify } from "./notifications";
 
@@ -14,11 +14,13 @@ type Stats = {
 export function TrafficStats() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
   const busy = useRef(false);
   const controller = useRef<AbortController | null>(null);
   async function load(signal: AbortSignal, manual = false) {
     if (busy.current) return;
     busy.current = true;
+    if (manual) setRevision((value) => value + 1);
     setLoading(true);
     try {
       const data = await api<Stats>("/api/traffic", {
@@ -79,11 +81,7 @@ export function TrafficStats() {
             if (controller.current) void load(controller.current.signal, true);
           }}
         >
-          <RefreshCw
-            size={12}
-            aria-hidden="true"
-            className={loading ? "refresh-spinning" : undefined}
-          />
+          <RefreshIcon size={12} active={loading} cycle={revision} />
           刷新
         </button>
       </span>

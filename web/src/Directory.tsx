@@ -6,7 +6,6 @@ import {
   Globe,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
   Shuffle,
@@ -23,6 +22,7 @@ import { filterGroups } from "./search";
 import { filterSites } from "./site-input";
 import { shuffleGroups } from "./group-order";
 import { notify } from "./notifications";
+import { Presence, RefreshIcon } from "./motion";
 import type { Group, GroupInput, Site, SiteInput, User } from "./types";
 
 type Editor =
@@ -222,6 +222,8 @@ export function Directory({
       </section>
       <ListTabs kind={kind} onChange={onKindChange} />
       <section
+        key={kind}
+        className="panel-enter"
         id="directory-panel"
         role="tabpanel"
         aria-labelledby={`tab-${kind}`}
@@ -283,10 +285,10 @@ export function Directory({
                 disabled={loading}
                 onClick={refresh}
               >
-                <RefreshCw
+                <RefreshIcon
                   size={20}
-                  className={loading ? "refresh-spinning" : undefined}
-                  aria-hidden="true"
+                  active={loading}
+                  cycle={revisions[kind]}
                 />
               </button>
             </div>
@@ -389,30 +391,34 @@ export function Directory({
           </>
         )}
       </section>
-      {editor &&
-        user &&
-        (editor.kind === "groups" ? (
-          <GroupForm
-            accountID={user.id}
-            group={editor.item}
-            onClose={() => setEditor(null)}
-            onSave={save}
+      <Presence visible={!!editor && !!user}>
+        {editor &&
+          user &&
+          (editor.kind === "groups" ? (
+            <GroupForm
+              accountID={user.id}
+              group={editor.item}
+              onClose={() => setEditor(null)}
+              onSave={save}
+            />
+          ) : (
+            <SiteForm
+              accountID={user.id}
+              site={editor.item}
+              onClose={() => setEditor(null)}
+              onSave={save}
+            />
+          ))}
+      </Presence>
+      <Presence visible={!!deleting}>
+        {deleting && (
+          <DeleteDialog
+            group={deleting}
+            onClose={() => setDeleting(null)}
+            onDelete={remove}
           />
-        ) : (
-          <SiteForm
-            accountID={user.id}
-            site={editor.item}
-            onClose={() => setEditor(null)}
-            onSave={save}
-          />
-        ))}
-      {deleting && (
-        <DeleteDialog
-          group={deleting}
-          onClose={() => setDeleting(null)}
-          onDelete={remove}
-        />
-      )}
+        )}
+      </Presence>
     </>
   );
 }

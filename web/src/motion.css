@@ -1,0 +1,171 @@
+:root {
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-fast: 140ms;
+  --motion-exit: 160ms;
+}
+.motion-presence {
+  display: contents;
+}
+.panel-enter {
+  animation: panel-enter 220ms var(--motion-ease) both;
+}
+.modal[open] {
+  animation: modal-enter 220ms var(--motion-ease) both;
+}
+.modal[open]::backdrop {
+  animation: backdrop-enter 220ms ease-out both;
+}
+.motion-presence[data-exiting="true"] .modal[open] {
+  animation: modal-exit var(--motion-exit) ease-in both;
+}
+.motion-presence[data-exiting="true"] .modal[open]::backdrop {
+  animation: backdrop-exit var(--motion-exit) ease-in both;
+}
+.account-menu {
+  transform-origin: top right;
+  animation: menu-enter 180ms var(--motion-ease) both;
+}
+.motion-presence[data-exiting="true"] .account-menu {
+  animation: menu-exit var(--motion-exit) ease-in both;
+}
+.avatar-button > svg {
+  transition: transform 180ms var(--motion-ease);
+}
+.avatar-button[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.list-tabs {
+  position: relative;
+}
+.list-tabs > .active {
+  border-bottom-color: transparent;
+}
+.tab-indicator-track {
+  position: absolute;
+  inset: 0 0 -1px;
+  overflow: clip;
+  pointer-events: none;
+}
+.tab-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #f8c820;
+  pointer-events: none;
+  transition:
+    transform 240ms var(--motion-ease),
+    width 240ms var(--motion-ease);
+}
+.refresh-spinning {
+  animation-duration: 700ms;
+}
+.primary,
+.secondary,
+.danger,
+.login,
+.icon-button,
+.join-button,
+.number-button,
+.provider-login,
+.qr-upload,
+.account-menu button,
+.list-tabs > button,
+.list-tabs > a,
+.owner-option,
+.nav-link,
+.traffic-refresh,
+.toast-close {
+  transition:
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+button:not(:disabled):active,
+.join-button:active,
+.provider-login:active {
+  transform: scale(0.97);
+}
+.search-box,
+.modal input,
+.link-input {
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes backdrop-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes menu-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal::backdrop {
+    animation: none !important;
+    transition: none !important;
+  }
+  button:not(:disabled):active,
+  .join-button:active,
+  .provider-login:active {
+    transform: none;
+  }
+}

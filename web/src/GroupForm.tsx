@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MotionDialog } from "./motion";
 import { Upload, Undo2, X } from "lucide-react";
 import {
   extractJoinLink,
@@ -50,13 +51,10 @@ export function GroupForm({
     writeGroupDraft(accountID, group?.id, input, scope);
   }, [accountID, group?.id, input, scope]);
   useEffect(() => {
-    const dialog = ref.current!;
     mounted.current = true;
-    dialog.showModal();
     return () => {
       qrGeneration.current++;
       mounted.current = false;
-      dialog.close();
     };
   }, []);
   const field = (key: keyof GroupInput, value: string) =>
@@ -79,7 +77,7 @@ export function GroupForm({
     }
   };
   return (
-    <dialog
+    <MotionDialog
       ref={ref}
       className="modal"
       onCancel={(e) => {
@@ -255,7 +253,7 @@ export function GroupForm({
           </button>
         </div>
       </form>
-    </dialog>
+    </MotionDialog>
   );
 }
 
@@ -270,13 +268,8 @@ export function DeleteDialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    const dialog = ref.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, []);
   return (
-    <dialog
+    <MotionDialog
       ref={ref}
       className="modal delete-modal"
       onCancel={(e) => {
@@ -314,6 +307,6 @@ export function DeleteDialog({
           {busy ? "删除中…" : "删除"}
         </button>
       </div>
-    </dialog>
+    </MotionDialog>
   );
 }

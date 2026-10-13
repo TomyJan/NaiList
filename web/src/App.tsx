@@ -9,6 +9,7 @@ import { Admin } from "./Admin";
 import { Notifications, notify } from "./notifications";
 import { SITE_VERSION, TRAFFIC_ENABLED } from "./runtime";
 import { TrafficStats } from "./TrafficStats";
+import { PageTransition, Presence } from "./motion";
 import type { User, LoginProvider } from "./types";
 
 export default function App() {
@@ -182,7 +183,7 @@ export default function App() {
                   aria-label="账户菜单"
                   aria-expanded={menu}
                   aria-haspopup="menu"
-                  onClick={() => setMenu(!menu)}
+                  onClick={() => setMenu((current) => !current)}
                 >
                   <span className="avatar">
                     {user.avatarUrl ? (
@@ -200,48 +201,53 @@ export default function App() {
                   </span>
                   <ChevronDown size={14} />
                 </button>
-                {menu && (
-                  <div className="account-menu" role="menu">
-                    <span className="nickname">{user.nickname}</span>
-                    <button role="menuitem" onClick={() => navigate("/manage")}>
-                      <Settings size={16} />
-                      管理奶表
-                    </button>
-                    {user.isAdmin && (
+                <Presence visible={menu}>
+                  {menu && (
+                    <div className="account-menu" role="menu">
+                      <span className="nickname">{user.nickname}</span>
                       <button
                         role="menuitem"
-                        onClick={() => navigate("/admin")}
+                        onClick={() => navigate("/manage")}
                       >
-                        <ShieldCheck size={16} />
-                        站点管理
+                        <Settings size={16} />
+                        管理奶表
                       </button>
-                    )}
-                    <button
-                      role="menuitem"
-                      disabled={logoutBusy}
-                      onClick={async () => {
-                        setLogoutBusy(true);
-                        try {
-                          await api(
-                            "/api/auth/logout",
-                            writeOptions("POST", user.csrfToken),
-                          );
-                          clearAccountDrafts(user.id);
-                          setUser(null);
-                          navigate("/");
-                          notify.success("已退出");
-                        } catch (e) {
-                          notify.error((e as Error).message);
-                        } finally {
-                          setLogoutBusy(false);
-                        }
-                      }}
-                    >
-                      <LogOut size={16} />
-                      退出登录
-                    </button>
-                  </div>
-                )}
+                      {user.isAdmin && (
+                        <button
+                          role="menuitem"
+                          onClick={() => navigate("/admin")}
+                        >
+                          <ShieldCheck size={16} />
+                          站点管理
+                        </button>
+                      )}
+                      <button
+                        role="menuitem"
+                        disabled={logoutBusy}
+                        onClick={async () => {
+                          setLogoutBusy(true);
+                          try {
+                            await api(
+                              "/api/auth/logout",
+                              writeOptions("POST", user.csrfToken),
+                            );
+                            clearAccountDrafts(user.id);
+                            setUser(null);
+                            navigate("/");
+                            notify.success("已退出");
+                          } catch (e) {
+                            notify.error((e as Error).message);
+                          } finally {
+                            setLogoutBusy(false);
+                          }
+                        }}
+                      >
+                        <LogOut size={16} />
+                        退出登录
+                      </button>
+                    </div>
+                  )}
+                </Presence>
               </div>
             ) : authLoaded ? (
               <button className="login" onClick={() => setLoginDialog(true)}>
@@ -253,7 +259,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      <main className="main">
+      <PageTransition value={path}>
         {adminPage ? (
           <Admin
             key={`${path}:${user?.id ?? "guest"}`}
@@ -300,7 +306,7 @@ export default function App() {
             />
           </>
         )}
-      </main>
+      </PageTransition>
       <footer className="footer">
         <div className="footer-meta">
           <span>
@@ -322,13 +328,15 @@ export default function App() {
         <p>反馈支持请搜索加入 兰理工 群</p>
         {TRAFFIC_ENABLED && <TrafficStats />}
       </footer>
-      {loginDialog && (
-        <LoginDialog
-          providers={providers}
-          onClose={() => setLoginDialog(false)}
-          onRetry={retryProviders}
-        />
-      )}
+      <Presence visible={loginDialog}>
+        {loginDialog && (
+          <LoginDialog
+            providers={providers}
+            onClose={() => setLoginDialog(false)}
+            onRetry={retryProviders}
+          />
+        )}
+      </Presence>
       <Notifications />
     </>
   );

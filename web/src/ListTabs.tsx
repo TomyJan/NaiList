@@ -1,4 +1,5 @@
 import { Globe, Users } from "lucide-react";
+import { TabIndicator } from "./motion";
 
 export type ListKind = "groups" | "sites";
 
@@ -29,6 +30,7 @@ export function ListTabs({
           </button>
         );
       })}
+      <TabIndicator value={kind} />
     </div>
   );
 }
