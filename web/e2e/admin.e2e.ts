@@ -28,12 +28,14 @@ const group = {
 const overview = {
   users: 18,
   groups: 42,
+  sites: 8,
   contributors: 12,
   organizations: 20,
   daily: Array.from({ length: 30 }, (_, index) => ({
     date: new Date(Date.UTC(2026, 8, 13 + index)).toISOString().slice(0, 10),
     users: index === 29 ? 3 : 0,
     groups: index === 29 ? 2 : index === 0 ? 4 : 0,
+    sites: index === 29 ? 1 : index === 0 ? 2 : 0,
   })),
 };
 
@@ -55,6 +57,7 @@ async function setup(page: Page, isAdmin = true) {
   await page.route("**/api/admin/stats", (r) => r.fulfill({ json: overview }));
   await page.route("**/api/admin/users", (r) => r.fulfill({ json: users }));
   await page.route("**/api/admin/groups", (r) => r.fulfill({ json: [group] }));
+  await page.route("**/api/admin/sites", (r) => r.fulfill({ json: [] }));
 }
 
 test("管理员入口、完整用户列表、搜索和安全限制", async ({ page }) => {
@@ -314,7 +317,7 @@ test("被管理员解绑的个人会话保存返回401后刷新认证并清草�
   await page.getByRole("button", { name: "编辑 测试大学" }).click();
   await page.getByLabel("学校 / 单位").fill("失效会话草稿");
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByText("登录后管理奶群")).toBeVisible();
+  await expect(page.getByText("登录后管理奶表")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(
     await page.evaluate(() => sessionStorage.getItem("nailist:draft:1:10")),
@@ -347,11 +350,11 @@ test("概览直达、统计、趋势切换与刷新不加载完整管理列表",
     "20",
   );
   await expect(page.locator(".stat-card").first()).toContainText("今日新增 3");
-  await expect(page.locator(".trend-card").last()).toContainText("共 6 个");
-  await expect(page.locator(".trend-day")).toHaveCount(60);
+  await expect(page.locator(".trend-groups")).toContainText("共 6 个");
+  await expect(page.locator(".trend-day")).toHaveCount(90);
   await page.getByRole("button", { name: "7 天", exact: true }).click();
-  await expect(page.locator(".trend-day")).toHaveCount(14);
-  await expect(page.locator(".trend-card").last()).toContainText("共 2 个");
+  await expect(page.locator(".trend-day")).toHaveCount(21);
+  await expect(page.locator(".trend-groups")).toContainText("共 2 个");
   await page.locator(".trend-day").first().focus();
   await expect(page.locator(".trend-detail").first()).toContainText("10-06");
   await page.getByRole("button", { name: "30 天", exact: true }).click();
@@ -414,15 +417,27 @@ test("概览失败重试、零数据和权限限制", async ({ page }) => {
       json: {
         users: 0,
         groups: 0,
+        sites: 0,
         contributors: 0,
         organizations: 0,
-        daily: overview.daily.map((day) => ({ ...day, users: 0, groups: 0 })),
+        daily: overview.daily.map((day) => ({
+          ...day,
+          users: 0,
+          groups: 0,
+          sites: 0,
+        })),
       },
     }),
   );
   await page.getByRole("button", { name: "重试", exact: true }).click();
-  await expect(page.locator(".stat-value")).toHaveText(["0", "0", "0", "0"]);
-  await expect(page.getByText("暂无新增", { exact: true })).toHaveCount(2);
+  await expect(page.locator(".stat-value")).toHaveText([
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+  ]);
+  await expect(page.getByText("暂无新增", { exact: true })).toHaveCount(3);
   await page.route("**/api/me", (r) =>
     r.fulfill({ json: { ...users[0], isAdmin: false } }),
   );
@@ -472,6 +487,7 @@ test("仅首页显示主页背景，管理路由直达和前进后退正确更�
     "/admin/",
     "/admin/users",
     "/admin/groups",
+    "/admin/sites",
     "/manage",
   ]) {
     await page.goto(path);

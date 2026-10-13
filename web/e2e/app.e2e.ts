@@ -134,7 +134,7 @@ test("首页每次加载随机排序，搜索和复制保持顺序，管理列�
   await expect(headings).toHaveText(firstOrder);
 
   await page.getByRole("button", { name: "账户菜单" }).click();
-  await page.getByRole("menuitem", { name: "管理奶群" }).click();
+  await page.getByRole("menuitem", { name: "管理奶表" }).click();
   await expect(headings).toHaveText(apiOrder);
 });
 
@@ -303,8 +303,8 @@ test("管理页添加、编辑、删除、退出", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.getByRole("button", { name: "账户菜单" }).click();
-  await page.getByRole("menuitem", { name: "管理奶群" }).click();
-  await expect(page.getByRole("heading", { name: "管理奶群." })).toBeVisible();
+  await page.getByRole("menuitem", { name: "管理奶表" }).click();
+  await expect(page.getByRole("heading", { name: "管理奶表." })).toBeVisible();
   await expect(
     page.locator("header").getByRole("link", { name: "首页", exact: true }),
   ).toBeVisible();

@@ -1,6 +1,4 @@
-import type { Group } from "./types";
-
-export function shuffleGroups(groups: readonly Group[]): Group[] {
+export function shuffleGroups<T>(groups: readonly T[]): T[] {
   const shuffled = [...groups];
   // Fisher–Yates: uniform shuffle in O(n), leaving the API response intact.
   for (let i = shuffled.length - 1; i > 0; i--) {

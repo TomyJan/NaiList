@@ -1,19 +1,3 @@
-.admin-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 28px;
-}
-.admin-nav a {
-  padding: 10px 20px;
-  border-radius: 999px;
-  color: #436049;
-  background: #eef4ed;
-}
-.admin-nav a.active {
-  background: #174a35;
-  color: #fff;
-}
 .admin-user {
   align-items: flex-start;
 }
@@ -23,7 +7,7 @@
 }
 .admin-user-summary p,
 .admin-group-info p {
-  color: #70806f;
+  color: #807b6f;
   font-size: 13px;
   margin-top: 8px;
   overflow-wrap: anywhere;
@@ -57,7 +41,7 @@
   white-space: nowrap;
 }
 .admin-reason {
-  color: #788675;
+  color: #827b6c;
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -69,7 +53,7 @@
 .admin-full-link {
   display: block;
   overflow-wrap: anywhere;
-  color: #477835;
+  color: #8a6500;
   font-size: 13px;
   margin-top: 8px;
   line-height: 1.65;
@@ -78,7 +62,7 @@
   flex-shrink: 0;
 }
 .owner-picker {
-  border: 1px solid #dce5d9;
+  border: 1px solid #e5e1d9;
   border-radius: 10px;
   padding: 12px;
   min-width: 0;
@@ -93,7 +77,7 @@
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
-  color: #58705f;
+  color: #706958;
 }
 .owner-options {
   display: grid;
@@ -106,16 +90,16 @@
   padding: 10px;
   text-align: left;
   border-radius: 7px;
-  color: #436049;
+  color: #605743;
   background: transparent;
   overflow-wrap: anywhere;
 }
 .owner-option:hover,
 .owner-option.selected {
-  background: #eef4ed;
+  background: #f5f1e9;
 }
 .owner-options > p {
-  color: #788675;
+  color: #827b6c;
   font-size: 12px;
   padding: 10px;
 }
@@ -131,7 +115,7 @@
     width: 100%;
   }
   .admin-identities {
-    border-top: 1px solid #e0e9e0;
+    border-top: 1px solid #e9e6e0;
     padding-top: 14px;
   }
   .admin-identity-action {
@@ -142,32 +126,27 @@
   }
 }
 @media (prefers-color-scheme: dark) {
-  .admin-nav a,
   .owner-option:hover,
   .owner-option.selected {
-    background: #2b3b30;
-    color: #d0e3d1;
-  }
-  .admin-nav a.active {
-    background: #a7d78f;
-    color: #14261a;
+    background: #423b2c;
+    color: #e8d9a0;
   }
   .admin-user-summary p,
   .admin-group-info p,
   .admin-reason,
   .owner-selected,
   .owner-options > p {
-    color: #a5b7ab;
+    color: #b7b2a5;
   }
   .admin-full-link {
-    color: #c4e3a8;
+    color: #e8d9a0;
   }
   .owner-picker,
   .admin-identities {
-    border-color: #41594a;
+    border-color: #595241;
   }
   .owner-option {
-    color: #d0e3d1;
+    color: #e8d9a0;
   }
 }
 
@@ -189,30 +168,30 @@
 .stats-method,
 .trend-card figcaption > span,
 .trend-detail {
-  color: #70806f;
+  color: #807b6f;
   font-size: 12px;
   line-height: 1.7;
 }
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
 }
 .stat-card,
 .trend-card {
   background: #fff;
-  border: 1px solid #dfe9de;
+  border: 1px solid #e9e6e0;
   border-radius: 16px;
   padding: 22px;
   min-width: 0;
   margin: 0;
 }
 .stat-label {
-  color: #58705f;
+  color: #706958;
   font-size: 13px;
 }
 .stat-label svg {
-  color: #87a77b;
+  color: #a68a43;
   flex-shrink: 0;
 }
 .stat-value {
@@ -235,19 +214,19 @@
   gap: 4px;
   padding: 4px;
   border-radius: 10px;
-  background: #eaf1e8;
+  background: #f5f1e9;
 }
 .trend-range button {
   border-radius: 7px;
   padding: 7px 13px;
-  color: #58705f;
+  color: #706958;
   background: transparent;
   font-size: 12px;
 }
 .trend-range button[aria-pressed="true"] {
   background: #fff;
-  color: #174a35;
-  box-shadow: 0 1px 5px #174a3510;
+  color: #8a6500;
+  box-shadow: 0 1px 5px #8a650010;
 }
 .trend-grid {
   display: grid;
@@ -268,25 +247,25 @@
   overflow: visible;
 }
 .trend-gridline {
-  stroke: #e8eee6;
+  stroke: #e9e6e0;
   stroke-dasharray: 3 4;
 }
 .trend-axis {
-  fill: #788675;
+  fill: #827b6c;
   font-size: 11px;
 }
 .trend-bar {
-  fill: #83ad8d;
+  fill: #c0a45a;
   pointer-events: none;
 }
 .trend-groups .trend-bar {
-  fill: #aec77d;
+  fill: #e0bf58;
 }
 .trend-bar.selected {
-  fill: #245c40;
+  fill: #8a6500;
 }
 .trend-groups .trend-bar.selected {
-  fill: #6e8e38;
+  fill: #b18b00;
 }
 .trend-hit {
   fill: transparent;
@@ -295,28 +274,25 @@
   outline: none;
 }
 .trend-day:focus-visible .trend-hit {
-  stroke: #436049;
+  stroke: #605743;
   stroke-width: 2px;
 }
 .trend-day:hover .trend-hit {
-  fill: #174a3506;
+  fill: #8a650006;
 }
 .trend-detail {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #e8eee6;
+  border-top: 1px solid #e9e6e0;
   font-variant-numeric: tabular-nums;
 }
 .trend-detail strong {
-  color: #436049;
+  color: #605743;
 }
 .stats-method {
   margin-top: 16px;
 }
 @media (max-width: 700px) {
-  .admin-nav a {
-    padding: 10px 13px;
-  }
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
@@ -334,8 +310,8 @@
 @media (prefers-color-scheme: dark) {
   .stat-card,
   .trend-card {
-    background: #1c2a21;
-    border-color: #354b3c;
+    background: #28241c;
+    border-color: #4a4334;
   }
   .overview-toolbar > p,
   .stat-card p,
@@ -343,40 +319,55 @@
   .trend-card figcaption > span,
   .trend-detail,
   .stat-label {
-    color: #a5b7ab;
+    color: #b7b2a5;
   }
   .trend-range {
-    background: #26382c;
+    background: #423b2c;
   }
   .trend-range button {
-    color: #b6c9b9;
+    color: #b7b2a5;
   }
   .trend-range button[aria-pressed="true"] {
-    background: #405b3a;
-    color: #e1f1d6;
+    background: #595241;
+    color: #e8d9a0;
   }
   .trend-gridline {
-    stroke: #354b3c;
+    stroke: #4a4334;
   }
   .trend-axis {
-    fill: #a5b7ab;
+    fill: #b7b2a5;
   }
   .trend-bar.selected {
-    fill: #b0d7b6;
+    fill: #e8d9a0;
   }
   .trend-groups .trend-bar.selected {
-    fill: #d4e6a8;
+    fill: #f8c820;
   }
   .trend-day:focus-visible .trend-hit {
-    stroke: #c4e3a8;
+    stroke: #e8d9a0;
   }
   .trend-day:hover .trend-hit {
-    fill: #b0d7b610;
+    fill: #e8d9a010;
   }
   .trend-detail {
-    border-color: #354b3c;
+    border-color: #4a4334;
   }
   .trend-detail strong {
-    color: #c4e3a8;
+    color: #e8d9a0;
+  }
+}
+
+.trend-sites .trend-bar {
+  fill: #c8a852;
+}
+.trend-sites .trend-bar.selected {
+  fill: #a17400;
+}
+@media (prefers-color-scheme: dark) {
+  .trend-sites .trend-bar {
+    fill: #9c8247;
+  }
+  .trend-sites .trend-bar.selected {
+    fill: #f8c820;
   }
 }

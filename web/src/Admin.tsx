@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Search, X } from "lucide-react";
+import {
+  ChartNoAxesCombined,
+  Globe,
+  List,
+  Pencil,
+  Search,
+  Users,
+  X,
+} from "lucide-react";
 import { api, ApiError, writeOptions } from "./api";
 import { AdminOverview } from "./AdminOverview";
 import { GroupForm } from "./GroupForm";
+import { SiteForm } from "./SiteForm";
+import { clearSiteDraft } from "./site-drafts";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { notify } from "./notifications";
 import type {
   AdminGroup,
+  AdminSite,
+  SiteInput,
   AdminUser,
   GroupInput,
   LoginProvider,
@@ -29,7 +41,7 @@ export function Admin({
   onLogin,
   onSessionExpired,
 }: {
-  page: "overview" | "users" | "groups";
+  page: "overview" | "users" | "groups" | "sites";
   user: User | null;
   authLoaded: boolean;
   providers: LoginProvider[] | null | undefined;
@@ -39,6 +51,8 @@ export function Admin({
 }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
+  const [sites, setSites] = useState<AdminSite[]>([]);
+  const [siteEditor, setSiteEditor] = useState<AdminSite | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -64,11 +78,15 @@ export function Admin({
       page === "groups"
         ? api<AdminGroup[]>("/api/admin/groups", { signal: controller.signal })
         : Promise.resolve([]),
+      page === "sites"
+        ? api<AdminSite[]>("/api/admin/sites", { signal: controller.signal })
+        : Promise.resolve([]),
     ])
-      .then(([accounts, records]) => {
+      .then(([accounts, records, stations]) => {
         if (controller.signal.aborted) return;
         setUsers(accounts);
         setGroups(records);
+        setSites(stations);
       })
       .catch((error: Error) => {
         if (controller.signal.aborted) return;
@@ -103,6 +121,21 @@ export function Admin({
       `${group.organization} ${group.keywords.join(" ")} ${group.qqNumber} ${group.joinUrl} ${ownerLabel(group.ownerId)}`,
     ),
   );
+  const visibleSites = sites.filter((site) =>
+    matches(
+      `${site.name} ${site.organization} ${site.domain} ${ownerLabel(site.ownerId)}`,
+    ),
+  );
+  const label = page === "users" ? "用户" : page === "sites" ? "奶站" : "奶群";
+  const pageTitle = page === "overview" ? "站点概览" : `${label}管理`;
+  const description =
+    page === "overview"
+      ? "查看全站用户、奶群与奶站的数量和新增趋势"
+      : page === "users"
+        ? "管理账号及登录方式，查看奶群与奶站归属数量"
+        : page === "sites"
+          ? "维护站点名称、学校 / 单位、域名与所属账号"
+          : "维护学校 / 单位、关键词、群号、链接与所属账号";
   const write = async (path: string, method: string, body?: unknown) => {
     if (!user) throw new Error("请重新登录");
     try {
@@ -126,6 +159,21 @@ export function Admin({
       8000,
     );
   };
+  const saveSite = async (input: SiteInput, ownerId?: number) => {
+    if (!siteEditor || !user) return;
+    await write(`/api/admin/sites/${siteEditor.id}`, "PUT", {
+      ...input,
+      ownerId,
+    });
+    clearSiteDraft(user.id, siteEditor.id, "admin");
+    if (!mounted.current) return;
+    setSiteEditor(null);
+    setRevision((value) => value + 1);
+    notify.success(
+      "已保存奶站信息与归属。奶站信息可能需要一分钟才能更新到首页, 请耐心等待",
+      8000,
+    );
+  };
   const confirm = async () => {
     if (!pending || !user) return;
     const { user: target, providerId } = pending;
@@ -146,8 +194,17 @@ export function Admin({
   };
   return (
     <>
-      <nav className="admin-nav" aria-label="站点管理导航">
-        {(["overview", "users", "groups"] as const).map((tab) => (
+      <section className="page-heading">
+        <div>
+          <h1>
+            {pageTitle}
+            <span className="title-dot">.</span>
+          </h1>
+          <p>{description}</p>
+        </div>
+      </section>
+      <nav className="list-tabs admin-nav" aria-label="站点管理导航">
+        {(["overview", "users", "groups", "sites"] as const).map((tab) => (
           <a
             key={tab}
             href={tab === "overview" ? "/admin" : `/admin/${tab}`}
@@ -158,24 +215,25 @@ export function Admin({
               navigate(tab === "overview" ? "/admin" : `/admin/${tab}`);
             }}
           >
+            {tab === "overview" ? (
+              <ChartNoAxesCombined size={17} aria-hidden="true" />
+            ) : tab === "users" ? (
+              <Users size={17} aria-hidden="true" />
+            ) : tab === "groups" ? (
+              <List size={17} aria-hidden="true" />
+            ) : (
+              <Globe size={17} aria-hidden="true" />
+            )}
             {tab === "overview"
               ? "概览"
               : tab === "users"
                 ? "用户管理"
-                : "奶群管理"}
+                : tab === "groups"
+                  ? "奶群管理"
+                  : "奶站管理"}
           </a>
         ))}
       </nav>
-      <section className="page-heading">
-        <h1>
-          {page === "overview"
-            ? "站点概览"
-            : page === "users"
-              ? "用户管理"
-              : "奶群管理"}
-          <span className="title-dot">.</span>
-        </h1>
-      </section>
       {!authLoaded ? (
         <div className="empty">加载登录状态中</div>
       ) : !user ? (
@@ -194,11 +252,13 @@ export function Admin({
           <div className="search-box">
             <Search size={20} />
             <input
-              aria-label={page === "users" ? "搜索用户" : "搜索奶群"}
+              aria-label={`搜索${label}`}
               placeholder={
                 page === "users"
                   ? "搜索昵称、账号 ID 或登录方式"
-                  : "搜索学校、关键词、群号或所属账号"
+                  : page === "sites"
+                    ? "搜索站名、学校、域名或所属账号"
+                    : "搜索学校、关键词、群号或所属账号"
               }
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -220,7 +280,9 @@ export function Admin({
                 ? "加载失败"
                 : page === "users"
                   ? `${visibleUsers.length} 个用户`
-                  : `${visibleGroups.length} 个奶群`}
+                  : page === "sites"
+                    ? `${visibleSites.length} 个奶站`
+                    : `${visibleGroups.length} 个奶群`}
           </div>
           {failed ? (
             <div className="empty">
@@ -238,12 +300,17 @@ export function Admin({
                 <div key={index} className="skeleton-row" />
               ))}
             </div>
-          ) : (page === "users" ? visibleUsers : visibleGroups).length === 0 ? (
+          ) : (page === "users"
+              ? visibleUsers
+              : page === "sites"
+                ? visibleSites
+                : visibleGroups
+            ).length === 0 ? (
             <div className="empty">
               <p>
                 {query
-                  ? `没有匹配的${page === "users" ? "用户" : "奶群"}`
-                  : `暂无${page === "users" ? "用户" : "有效奶群"}`}
+                  ? `没有匹配的${label}`
+                  : `暂无${page === "users" ? "用户" : `有效${label}`}`}
               </p>
               {query && (
                 <button className="secondary" onClick={() => setQuery("")}>
@@ -257,8 +324,8 @@ export function Admin({
                 const deleteReason =
                   account.id === user.id
                     ? "不能删除当前管理员账号"
-                    : account.groupCount > 0
-                      ? "请先在奶群管理转移有效奶群归属"
+                    : account.groupCount > 0 || account.siteCount > 0
+                      ? "请先转移该账号的有效奶群和奶站归属"
                       : "";
                 return (
                   <article className="group-row admin-user" key={account.id}>
@@ -266,6 +333,7 @@ export function Admin({
                       <h2>{account.nickname}</h2>
                       <p>
                         账号 ID：{account.id} · {account.groupCount} 个有效奶群
+                        · {account.siteCount ?? 0} 个有效奶站
                       </p>
                       <button
                         className="secondary"
@@ -325,6 +393,37 @@ export function Admin({
                 );
               })}
             </div>
+          ) : page === "sites" ? (
+            <div className="group-list">
+              {visibleSites.map((site) => (
+                <article
+                  className="group-row admin-group site-row"
+                  key={site.id}
+                >
+                  <div className="admin-group-info">
+                    <h2>{site.name}</h2>
+                    <p>学校 / 单位：{site.organization}</p>
+                    <a
+                      className="admin-full-link"
+                      href={`https://${site.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      https://{site.domain}
+                    </a>
+                    <p>所属账号：{ownerLabel(site.ownerId)}</p>
+                  </div>
+                  <button
+                    className="secondary"
+                    aria-label={`编辑 ${site.name}`}
+                    onClick={() => setSiteEditor(site)}
+                  >
+                    <Pencil size={16} />
+                    编辑
+                  </button>
+                </article>
+              ))}
+            </div>
           ) : (
             <div className="group-list">
               {visibleGroups.map((group) => (
@@ -370,6 +469,16 @@ export function Admin({
           ownership={{ users, ownerId: editor.ownerId }}
           onClose={() => setEditor(null)}
           onSave={save}
+        />
+      )}
+      {siteEditor && user?.isAdmin && (
+        <SiteForm
+          key={siteEditor.id}
+          accountID={user.id}
+          site={siteEditor}
+          ownership={{ users, ownerId: siteEditor.ownerId }}
+          onClose={() => setSiteEditor(null)}
+          onSave={saveSite}
         />
       )}
       {pending && user?.isAdmin && (

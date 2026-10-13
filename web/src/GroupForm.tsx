@@ -11,7 +11,8 @@ import {
   type GroupDraft,
 } from "./group-drafts";
 import { notify } from "./notifications";
-import type { AdminUser, Group, GroupInput } from "./types";
+import { OwnerPicker } from "./OwnerPicker";
+import type { AdminUser, Group, GroupInput, Site } from "./types";
 
 export function GroupForm({
   accountID,
@@ -39,7 +40,7 @@ export function GroupForm({
     ...original,
     ...readGroupDraft(accountID, group?.id, scope),
   }));
-  const [ownerQuery, setOwnerQuery] = useState("");
+  const [ownerRevision, setOwnerRevision] = useState(0);
   const selectedOwner = ownership?.users.find(
     (owner) => owner.id === input.ownerId,
   );
@@ -216,52 +217,15 @@ export function GroupForm({
           />
         </div>
         {ownership && (
-          <fieldset className="owner-picker" disabled={busy}>
-            <legend>所属账号</legend>
-            <p className="owner-selected">
-              当前选择：
-              {selectedOwner
-                ? `${selectedOwner.nickname}（ID：${selectedOwner.id}）`
-                : `账号不可用（ID：${input.ownerId}），请重新选择`}
-            </p>
-            <input
-              aria-label="搜索所属账号"
-              placeholder="搜索昵称或账号 ID"
-              value={ownerQuery}
-              onChange={(e) => setOwnerQuery(e.target.value)}
-            />
-            <div className="owner-options" aria-label="所属账号选项">
-              {ownership.users
-                .filter((owner) =>
-                  `${owner.nickname} ${owner.id}`
-                    .toLocaleLowerCase()
-                    .includes(ownerQuery.trim().toLocaleLowerCase()),
-                )
-                .map((owner) => (
-                  <button
-                    type="button"
-                    key={owner.id}
-                    className={
-                      owner.id === input.ownerId
-                        ? "owner-option selected"
-                        : "owner-option"
-                    }
-                    aria-label={`选择 ${owner.nickname}（ID：${owner.id}）`}
-                    aria-pressed={owner.id === input.ownerId}
-                    onClick={() =>
-                      setInput((current) => ({ ...current, ownerId: owner.id }))
-                    }
-                  >
-                    {owner.nickname}（ID：{owner.id}）
-                  </button>
-                ))}
-              {!ownership.users.some((owner) =>
-                `${owner.nickname} ${owner.id}`
-                  .toLocaleLowerCase()
-                  .includes(ownerQuery.trim().toLocaleLowerCase()),
-              ) && <p>没有匹配的账号</p>}
-            </div>
-          </fieldset>
+          <OwnerPicker
+            key={ownerRevision}
+            users={ownership.users}
+            ownerId={input.ownerId}
+            disabled={busy}
+            onChange={(ownerId) =>
+              setInput((current) => ({ ...current, ownerId }))
+            }
+          />
         )}
         <div className="modal-actions">
           <button
@@ -272,7 +236,7 @@ export function GroupForm({
               qrGeneration.current++;
               setReading(false);
               setInput({ ...original });
-              setOwnerQuery("");
+              setOwnerRevision((value) => value + 1);
             }}
           >
             <Undo2 size={16} />
@@ -300,7 +264,7 @@ export function DeleteDialog({
   onClose,
   onDelete,
 }: {
-  group: Group;
+  group: Group | Site;
   onClose: () => void;
   onDelete: () => Promise<void>;
 }) {
@@ -321,9 +285,13 @@ export function DeleteDialog({
       }}
       aria-labelledby="delete-title"
     >
-      <h2 id="delete-title">删除奶群？</h2>
+      <h2 id="delete-title">
+        {"qqNumber" in group ? "删除奶群？" : "删除奶站？"}
+      </h2>
       <p className="delete-name">
-        {group.organization} · {group.qqNumber}
+        {"qqNumber" in group
+          ? `${group.organization} · ${group.qqNumber}`
+          : `${group.name} · ${group.domain}`}
       </p>
       <div className="modal-actions">
         <button className="secondary" onClick={onClose} disabled={busy}>

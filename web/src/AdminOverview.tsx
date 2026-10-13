@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Building2,
+  Globe,
   List,
   RefreshCw,
   UserRoundCheck,
@@ -59,9 +60,15 @@ export function AdminOverview({
           Icon: List,
         },
         {
+          label: "有效奶站",
+          value: stats.sites ?? 0,
+          note: `今日新增 ${today?.sites ?? 0}`,
+          Icon: Globe,
+        },
+        {
           label: "上传用户",
           value: stats.contributors,
-          note: "拥有有效奶群的用户",
+          note: "拥有有效奶群或奶站的用户",
           Icon: UserRoundCheck,
         },
         {
@@ -157,9 +164,15 @@ export function AdminOverview({
                 field="groups"
                 label="新增奶群"
               />
+              <TrendChart
+                key={`sites-${days}`}
+                daily={daily}
+                field="sites"
+                label="新增奶站"
+              />
             </div>
             <p className="stats-method">
-              按北京时间创建日期统计现存用户与有效奶群，已删除数据不计入。
+              按北京时间创建日期统计现存用户、有效奶群与奶站，已删除数据不计入。
             </p>
           </>
         )
@@ -174,12 +187,12 @@ function TrendChart({
   label,
 }: {
   daily: AdminStats["daily"];
-  field: "users" | "groups";
+  field: "users" | "groups" | "sites";
   label: string;
 }) {
   const [selected, setSelected] = useState(daily.length - 1);
-  const max = Math.max(1, ...daily.map((day) => day[field]));
-  const total = daily.reduce((sum, day) => sum + day[field], 0);
+  const max = Math.max(1, ...daily.map((day) => day[field] ?? 0));
+  const total = daily.reduce((sum, day) => sum + (day[field] ?? 0), 0);
   const width = 400;
   const height = 140;
   const step = width / Math.max(1, daily.length);
@@ -213,7 +226,7 @@ function TrendChart({
           </g>
         ))}
         {daily.map((day, index) => {
-          const barHeight = (day[field] / max) * height;
+          const barHeight = ((day[field] ?? 0) / max) * height;
           return (
             <g
               key={day.date}

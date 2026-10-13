@@ -1,4 +1,5 @@
 import type { GroupInput } from "./types";
+import { clearSiteAccountDrafts } from "./site-drafts";
 
 export type GroupDraft = GroupInput & { ownerId?: number };
 export type DraftScope = "personal" | "admin";
@@ -65,6 +66,7 @@ export function clearGroupDraft(
 }
 
 export function clearAccountDrafts(account: number) {
+  clearSiteAccountDrafts(account);
   const belongsToAccount = (draftKey: string) =>
     draftKey.startsWith(prefix(account)) ||
     draftKey.startsWith(prefix(account, "admin"));

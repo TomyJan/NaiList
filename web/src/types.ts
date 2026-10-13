@@ -19,10 +19,26 @@ export interface AdminUser {
   nickname: string;
   avatarUrl: string;
   groupCount: number;
+  siteCount: number;
   identities: LoginIdentity[];
 }
 export interface AdminGroup extends Group {
   ownerId: number;
+}
+export interface Site {
+  id: number;
+  name: string;
+  domain: string;
+  organization: string;
+  updatedAt: string;
+}
+export interface AdminSite extends Site {
+  ownerId: number;
+}
+export interface SiteInput {
+  name: string;
+  domain: string;
+  organization: string;
 }
 export interface LoginIdentity {
   providerId: string;
@@ -45,7 +61,8 @@ export interface GroupInput {
 export interface AdminStats {
   users: number;
   groups: number;
+  sites: number;
   contributors: number;
   organizations: number;
-  daily: { date: string; users: number; groups: number }[];
+  daily: { date: string; users: number; groups: number; sites: number }[];
 }
