@@ -81,6 +81,8 @@ func requestErrorLogged(r *http.Request) {
 func requestOperation(r *http.Request) (string, string) {
 	path := r.URL.Path
 	switch {
+	case path == "/api/traffic" && r.Method == "GET":
+		return "traffic.stats", "获取页脚访问统计"
 	case path == "/api/admin/stats" && r.Method == "GET":
 		return "admin.stats", "获取站点统计与每日新增趋势"
 	case path == "/api/admin/users" && r.Method == "GET":

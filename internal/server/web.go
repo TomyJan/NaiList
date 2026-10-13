@@ -6,6 +6,7 @@ import (
 	"html"
 	"io/fs"
 	"log/slog"
+	"nailist/internal/traffic"
 	"nailist/web"
 	"net/http"
 	"net/url"
@@ -28,12 +29,16 @@ func umamiOrigin(cfg Config) (string, error) {
 
 func ValidateWebConfig(cfg Config) error {
 	_, err := umamiOrigin(cfg)
+	if err == nil && strings.TrimSpace(cfg.UmamiShareURL) != "" {
+		_, err = traffic.New(cfg.UmamiShareURL)
+	}
 	return err
 }
 
 // Capture the configured HTML once at startup; assets remain embedded and unchanged.
 func newWebHandler(cfg Config) (http.Handler, string) {
-	origin, configErr := umamiOrigin(cfg)
+	origin, _ := umamiOrigin(cfg)
+	configErr := ValidateWebConfig(cfg)
 	extra := ""
 	if origin != "" {
 		extra = " " + origin
@@ -52,6 +57,9 @@ func newWebHandler(cfg Config) (http.Handler, string) {
 		slog.Error("前端运行配置无效", "error", configErr)
 	}
 	runtimeHTML := `<meta name="nailist-version" content="` + html.EscapeString(cfg.Version) + `" />`
+	if strings.TrimSpace(cfg.UmamiShareURL) != "" && configErr == nil {
+		runtimeHTML += `<meta name="nailist-traffic" content="enabled" />`
+	}
 	if origin != "" {
 		runtimeHTML += `<script defer src="` + html.EscapeString(cfg.UmamiScriptURL) + `" data-website-id="` + html.EscapeString(cfg.UmamiWebsiteID) + `"></script>`
 	}

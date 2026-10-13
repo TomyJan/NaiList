@@ -13,6 +13,7 @@ import (
 	"nailist/internal/groups"
 	"nailist/internal/logging"
 	"nailist/internal/sites"
+	"nailist/internal/traffic"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 type Config struct {
 	PublicURL, QQAppID, QQAppKey            string
 	Version, UmamiScriptURL, UmamiWebsiteID string
+	UmamiShareURL                           string
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig
 	AdminUserIDs                            map[int64]bool
@@ -50,11 +52,16 @@ type Server struct {
 	client    *http.Client
 	web       http.Handler
 	csp       string
+	traffic   *traffic.Client
 }
 
 func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
 	web, csp := newWebHandler(cfg)
-	return &Server{cfg: cfg, db: db, store: store, siteStore: sites.Store{DB: db}, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp}
+	var stats *traffic.Client
+	if strings.TrimSpace(cfg.UmamiShareURL) != "" {
+		stats, _ = traffic.New(cfg.UmamiShareURL) // Validated before starting HTTP.
+	}
+	return &Server{cfg: cfg, db: db, store: store, siteStore: sites.Store{DB: db}, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp, traffic: stats}
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -65,6 +72,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(s.session)
 	r.Get("/api/groups", s.list)
 	r.Get("/api/sites", s.listSites)
+	r.Get("/api/traffic", s.trafficStats)
 	r.Get("/api/me", s.me)
 	r.Get("/api/auth/providers", s.authProviders)
 	r.Route("/api/admin", func(r chi.Router) {

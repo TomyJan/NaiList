@@ -67,7 +67,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 		return &environmentLoadError{cause: err}
 	}
 	stage = "logging_config"
-	logger, err = logging.New(output, env("LOG_LEVEL", "info"), databaseURL(), os.Getenv("QQ_APP_KEY"), os.Getenv("OIDC_CLIENT_SECRET"))
+	logger, err = logging.New(output, env("LOG_LEVEL", "info"), databaseURL(), os.Getenv("QQ_APP_KEY"), os.Getenv("OIDC_CLIENT_SECRET"), os.Getenv("UMAMI_SHARE_URL"))
 	if err != nil {
 		return err
 	}
@@ -99,6 +99,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 	cfg.Version = version
 	cfg.UmamiScriptURL = os.Getenv("UMAMI_SCRIPT_URL")
 	cfg.UmamiWebsiteID = os.Getenv("UMAMI_WEBSITE_ID")
+	cfg.UmamiShareURL = strings.TrimSpace(os.Getenv("UMAMI_SHARE_URL"))
 	if err = server.ValidateWebConfig(cfg); err != nil {
 		return err
 	}
@@ -111,7 +112,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 	if err = server.ValidateAuthConfig(cfg); err != nil {
 		return err
 	}
-	slog.Info("配置校验通过，已确定站点与登录方式", "component", "config", "event", "config.validated", "public_url", publicURL, "listen_address", listenAddr(), "qq_enabled", cfg.QQAppID != "" && cfg.QQAppKey != "", "qq_unionid", cfg.QQUseUnionID, "oidc_enabled", cfg.OIDC.ID != "", "oidc_provider", cfg.OIDC.ID, "umami_enabled", cfg.UmamiScriptURL != "")
+	slog.Info("配置校验通过，已确定站点与登录方式", "component", "config", "event", "config.validated", "public_url", publicURL, "listen_address", listenAddr(), "qq_enabled", cfg.QQAppID != "" && cfg.QQAppKey != "", "qq_unionid", cfg.QQUseUnionID, "oidc_enabled", cfg.OIDC.ID != "", "oidc_provider", cfg.OIDC.ID, "umami_enabled", cfg.UmamiScriptURL != "", "traffic_enabled", cfg.UmamiShareURL != "")
 	if cfg.OIDC.ID != "" {
 		slog.Debug("OIDC 登录配置已启用，授权时将发现并校验服务端点", "component", "config", "event", "config.oidc.enabled", "provider", cfg.OIDC.ID, "issuer", cfg.OIDC.Issuer, "callback_path", "/auth/"+cfg.OIDC.ID+"/callback", "extra_scopes", strings.Fields(cfg.OIDC.Scopes))
 	}
