@@ -112,6 +112,13 @@ func TestPostgresSitesLifecycle(t *testing.T) {
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM sites WHERE owner_id=$1`, owner).Scan(&history); err != nil || history != 0 {
 		t.Fatalf("history: %d %v", history, err)
 	}
+	chineseBody := `{"name":"甘肃奶龙大学","domain":"甘肃奶龙大学.com","organization":"兰州理工大学"}`
+	w = request("POST", "/api/sites", chineseBody, token, "csrf")
+	expect(w, 201)
+	if err := json.Unmarshal(w.Body.Bytes(), &saved); err != nil || saved.Domain != "xn--psszg58cy52cu6lj57b.com" {
+		t.Fatalf("Chinese domain: %s %v", w.Body.String(), err)
+	}
+	expect(request("POST", "/api/sites", strings.Replace(chineseBody, "甘肃奶龙大学.com", saved.Domain, 1), token, "csrf"), 409)
 }
 
 func TestPostgresSiteDomainUniquenessAndSoftDelete(t *testing.T) {

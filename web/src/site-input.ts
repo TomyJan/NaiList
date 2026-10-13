@@ -1,12 +1,21 @@
 import type { Site, SiteInput } from "./types";
 
 export function normalizeDomain(value: string): string {
-  return value
+  const domain = value
     .trim()
     .replace(/^https?:\/\//i, "")
     .replace(/^www\./i, "")
     .split(/[/?#]/, 1)[0]
     .toLowerCase();
+  // Convert internationalized labels without letting URL parsing discard
+  // credentials, ports, escapes or backslashes from an invalid domain.
+  if (!/[^\u0000-\u007f]/.test(domain) || /[\s\\:@%]/u.test(domain))
+    return domain;
+  try {
+    return new URL(`https://${domain}`).hostname;
+  } catch {
+    return domain;
+  }
 }
 
 const domainPattern =
@@ -21,7 +30,7 @@ export function validateSiteInput(input: SiteInput): string | null {
   )
     return "学校/单位必填，最多 32 字";
   if (!domainPattern.test(input.domain.trim()))
-    return "请输入有效域名，如 nailong.example.com";
+    return "请输入有效域名，如 甘肃奶龙大学.com";
   return null;
 }
 

@@ -213,6 +213,34 @@ test("奶站表单清理链接、草稿、撤销、校验、保存与删除", as
   ).toHaveCount(0);
 });
 
+test("中文域名可添加和编辑，提交规范域名", async ({ page }) => {
+  const calls = await mockSites(page);
+  await page.goto("/manage");
+  await page.getByRole("tab", { name: "奶站列表" }).click();
+  await page.getByRole("button", { name: "添加奶站", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("站点名称", { exact: true }).fill("甘肃奶龙大学");
+  await dialog.getByLabel("学校 / 单位", { exact: true }).fill("兰州理工大学");
+  await dialog
+    .getByLabel("站点域名", { exact: true })
+    .fill("https://www.甘肃奶龙大学.com/首页");
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const input = {
+    name: "甘肃奶龙大学",
+    organization: "兰州理工大学",
+    domain: "xn--psszg58cy52cu6lj57b.com",
+  };
+  expect(calls.find((call) => call.method === "POST")?.body).toEqual(input);
+  await page
+    .getByRole("button", { name: "编辑 甘肃奶龙大学", exact: true })
+    .click();
+  await dialog.getByLabel("站点域名", { exact: true }).fill("甘肃奶龙大学.com");
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(calls.find((call) => call.method === "PUT")?.body).toEqual(input);
+});
+
 test("后台导航统一、用户描述、奶站归属修改及删除保护", async ({ page }) => {
   const calls = await mockSites(page, true);
   await page.goto("/admin/users");

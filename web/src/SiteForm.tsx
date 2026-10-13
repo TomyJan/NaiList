@@ -137,7 +137,7 @@ export function SiteForm({
                 Array.from(event.target.value).slice(0, 32).join(""),
               )
             }
-            placeholder="填写站点名称"
+            placeholder="甘肃奶龙大学"
           />
         </label>
         <div className="site-link-field">
@@ -164,7 +164,7 @@ export function SiteForm({
                   normalizeDomain(event.clipboardData.getData("text")),
                 );
               }}
-              placeholder="nailong.example.com"
+              placeholder="甘肃奶龙大学.com"
             />
           </div>
           <p className="field-help" id="site-domain-help">
@@ -189,7 +189,7 @@ export function SiteForm({
                 Array.from(event.target.value).slice(0, 32).join(""),
               )
             }
-            placeholder="填写所属学校或单位"
+            placeholder="兰州理工大学"
           />
         </label>
         {ownership && (

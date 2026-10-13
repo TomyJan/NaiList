@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/net/idna"
 )
 
 type Site struct {
@@ -36,6 +38,11 @@ func Normalize(in Input) (Site, error) {
 	if s.Organization == "" || utf8.RuneCountInString(s.Organization) > 32 {
 		return s, errors.New("学校/单位必填，最多 32 字")
 	}
+	domain, err := idna.Lookup.ToASCII(s.Domain)
+	if err != nil {
+		return s, errors.New("请输入有效域名，不含协议、端口或路径")
+	}
+	s.Domain = strings.TrimPrefix(strings.ToLower(domain), "www.")
 	labels := strings.Split(s.Domain, ".")
 	valid := len(s.Domain) <= 253 && len(labels) >= 2 && net.ParseIP(s.Domain) == nil && tldPattern.MatchString(labels[len(labels)-1])
 	for _, label := range labels {
