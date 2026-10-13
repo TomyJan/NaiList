@@ -7,7 +7,7 @@ Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。前�
 准备已创建数据库的 PostgreSQL 16+，将 `.env.example` 复制为工作目录下的 `.env`，填写连接串、站点地址和登录方式。Docker 和裸跑使用相同字段，进程环境变量优先于 `.env`。
 
 ```env
-DATABASE_URL=postgres://nailist:密码@数据库地址:5432/nailist?sslmode=disable
+DATABASE_URL=postgres://nailist:密码@数据库地址:5432/nailist?sslmode=verify-full
 PUBLIC_URL=https://群列表域名
 QQ_APP_ID=QQ互联应用ID
 QQ_APP_KEY=QQ互联应用密钥
@@ -15,6 +15,8 @@ PORT=8080
 ```
 
 数据库只使用 `DATABASE_URL`，连接串中的密码特殊字符需 URL 编码。服务监听 `PORT`（默认 8080），前端固定内嵌。QQ/OIDC 配置见下方「登录方式与账号绑定」。
+
+外部数据库使用 `sslmode=verify-full`，校验证书和数据库主机名；证书须由受信任 CA 签发。私有 CA 在同一连接串追加 `&sslrootcert=/证书绝对路径/ca.pem`，Docker 需将该证书只读挂载到容器内相应路径。仅可信本机或隔离测试网络可使用 `sslmode=disable`，不要通过公网明文连接数据库。
 
 Umami 在同一 `.env` 中配置：
 
@@ -69,6 +71,16 @@ location / {
 ```
 
 在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose pull && docker compose up -d`。升级前备份外部 PostgreSQL 数据库，备份与恢复由数据库管理工具执行。
+
+代理部署须在 `.env` 配置 `TRUSTED_PROXY_CIDRS` 为程序实际看到的反向代理出口 CIDR。直接在宿主机运行且 Nginx 通过 loopback 连接时，可填 `127.0.0.1/32,::1/128`；Docker 桥接网络通常看到网关地址，须核实后只信任该地址，不要直接信任全部私有网段。使用 CDN 时同时配置链路中真实可信的代理网段，并在源站限制直接访问。程序从右向左解析 `X-Forwarded-For`，仅跳过已配置的代理；留空时只按 TCP 对端限流，忽略转发头和 `X-Real-IP`。无效 CIDR 会拒绝启动。
+
+## 请求与上传限制
+
+- 登录发起（含绑定）：每 IP 每分钟 20 次，全站每分钟 120 次；回调独立为每 IP 60 次、全站 240 次。频率检查在会话查询和授权流程写入前执行；发起与回调各自限制并发为 8 / 16。
+- 账号写操作（含管理员变更）：每分钟 30 次、每小时 200 次，两者都满足才允许。API 超限返回 429 和 `Retry-After`；浏览器登录超限返回带提示的首页，仍附该响应头。
+- 每账号奶群与奶站合计最多 100 条有效记录、累计最多 1000 条（包含软删除历史）。创建时在数据库事务中锁定账号并校验，两种类型及多个实例共享配额；超限返回 429 和具体提示，仍可编辑或删除。删除释放有效额度，累计额度保留；既有数据不自动清理，管理员可转移归属。
+
+频率限制使用有界进程内存和固定时间窗口，重启会重置；多个应用实例需在反向代理 / WAF 统一限流。上传配额保存在数据库中，重启不重置。
 
 ## 二进制部署
 

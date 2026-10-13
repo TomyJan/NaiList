@@ -248,7 +248,7 @@ jobs:
           node-version: "22"
       - name: Validate deployment configuration
         env:
-          DATABASE_URL: postgres://nailist:ci-test-password@postgres.example.com:5432/nailist?sslmode=disable
+          DATABASE_URL: postgres://nailist:ci-test-password@postgres.example.com:5432/nailist?sslmode=verify-full
           PUBLIC_URL: https://groups.example.com
         run: docker compose config --quiet
       - name: Build container

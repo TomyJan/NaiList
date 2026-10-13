@@ -9,6 +9,14 @@ const group = {
   updatedAt: "",
 };
 
+test("登录限流返回首页后显示提示并清理查询参数", async ({ page }) => {
+  await page.goto("/?auth_error=rate_limited");
+  await expect(page.getByRole("alert")).toContainText(
+    "登录操作过于频繁，请稍后重试",
+  );
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.route("http://umami.test/**", (r) =>
     r.fulfill({ contentType: "application/javascript", body: "" }),

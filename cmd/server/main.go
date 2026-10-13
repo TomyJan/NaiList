@@ -92,6 +92,10 @@ func run(ctx context.Context, output io.Writer) (err error) {
 		return errors.New("PORT 必须为 1～65535 的整数")
 	}
 	cfg := server.Config{PublicURL: publicURL, QQAppID: os.Getenv("QQ_APP_ID"), QQAppKey: os.Getenv("QQ_APP_KEY")}
+	cfg.TrustedProxyCIDRs, err = server.ParseTrustedProxyCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return err
+	}
 	cfg.AdminUserIDs, err = parseAdminUserIDs(os.Getenv("ADMIN_USER_IDS"))
 	if err != nil {
 		return err
@@ -153,7 +157,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 	}
 	slog.Info("数据库连接验证通过", "component", "database", "event", "db.pool.ready", "database", dbConfig.ConnConfig.Database, "duration_ms", logging.DurationMS(started))
 	stage = "database_migrate"
-	slog.Debug("开始幂等数据库迁移，将先获取事务级排他迁移锁", "component", "database", "event", "db.migration.started", "migration_count", 2)
+	slog.Debug("开始幂等数据库迁移，将先获取事务级排他迁移锁", "component", "database", "event", "db.migration.started", "migration_count", migrations.Count)
 	started = time.Now()
 	if err = migrate(startup, db); err != nil {
 		return err
@@ -162,7 +166,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 	s := server.New(cfg, db, groups.Store{DB: db})
 	httpServer := &http.Server{Addr: listenAddr(), Handler: s.Routes(), ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	stage = "http_serve"
-	slog.Debug("HTTP 请求限制已配置", "component", "http", "event", "http.server.configured", "read_header_timeout_ms", 5000, "read_timeout_ms", 20000, "write_timeout_ms", 30000, "idle_timeout_ms", 60000, "request_timeout_ms", 20000, "write_concurrency", 32, "auth_concurrency", 16, "shutdown_timeout_ms", 10000)
+	slog.Debug("HTTP 请求限制已配置，登录发起与回调独立限流，可信代理之外的转发头不参与客户端识别", "component", "http", "event", "http.server.configured", "read_header_timeout_ms", 5000, "read_timeout_ms", 20000, "write_timeout_ms", 30000, "idle_timeout_ms", 60000, "request_timeout_ms", 20000, "write_concurrency", 32, "auth_start_concurrency", 8, "auth_callback_concurrency", 16, "auth_start_per_ip_minute", 20, "auth_start_global_minute", 120, "auth_callback_per_ip_minute", 60, "auth_callback_global_minute", 240, "user_writes_minute", 30, "user_writes_hour", 200, "trusted_proxy_cidrs", cfg.TrustedProxyCIDRs, "shutdown_timeout_ms", 10000)
 	ready = true
 	slog.Info("HTTP 服务就绪，可接受页面、奶群与登录请求", "component", "app", "event", "app.ready", "address", listener.Addr().String(), "public_url", publicURL, "startup_ms", logging.DurationMS(lifetime))
 	return serveHTTP(ctx, httpServer, listener)

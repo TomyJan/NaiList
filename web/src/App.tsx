@@ -101,6 +101,7 @@ export default function App() {
             identity_conflict: "此登录身份已绑定其他账号",
             already_bound: "此账号已绑定该登录方式",
             session_changed: "登录状态已变化，请重新绑定",
+            rate_limited: "登录操作过于频繁，请稍后重试",
           } as Record<string, string>
         )[authError] || "登录或绑定失败，请重试",
       );

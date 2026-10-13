@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"nailist/internal/logging"
+	"nailist/internal/resources"
 )
 
 type Store struct{ DB *pgxpool.Pool }
@@ -38,13 +39,14 @@ func (s Store) Save(ctx context.Context, owner, id int64, g Group) (Group, error
 		operation = "groups.update"
 	}
 	ctx = logging.WithOperation(ctx, operation)
-	var row pgx.Row
+	var err error
 	if id == 0 {
-		row = s.DB.QueryRow(ctx, `INSERT INTO groups(owner_id,organization,keywords,qq_number,join_url) VALUES($1,$2,$3,$4,$5) RETURNING id,updated_at`, owner, g.Organization, g.Keywords, g.QQNumber, g.JoinURL)
+		err = resources.Create(ctx, s.DB, owner, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `INSERT INTO groups(owner_id,organization,keywords,qq_number,join_url) VALUES($1,$2,$3,$4,$5) RETURNING id,updated_at`, owner, g.Organization, g.Keywords, g.QQNumber, g.JoinURL).Scan(&g.ID, &g.UpdatedAt)
+		})
 	} else {
-		row = s.DB.QueryRow(ctx, `UPDATE groups SET organization=$3,keywords=$4,qq_number=$5,join_url=$6,updated_at=now() WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL RETURNING id,updated_at`, id, owner, g.Organization, g.Keywords, g.QQNumber, g.JoinURL)
+		err = s.DB.QueryRow(ctx, `UPDATE groups SET organization=$3,keywords=$4,qq_number=$5,join_url=$6,updated_at=now() WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL RETURNING id,updated_at`, id, owner, g.Organization, g.Keywords, g.QQNumber, g.JoinURL).Scan(&g.ID, &g.UpdatedAt)
 	}
-	err := row.Scan(&g.ID, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return g, ErrNotFound
 	}

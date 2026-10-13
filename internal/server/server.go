@@ -12,9 +12,11 @@ import (
 	"log/slog"
 	"nailist/internal/groups"
 	"nailist/internal/logging"
+	"nailist/internal/resources"
 	"nailist/internal/sites"
 	"nailist/internal/traffic"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -28,6 +30,7 @@ type Config struct {
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig
 	AdminUserIDs                            map[int64]bool
+	TrustedProxyCIDRs                       []netip.Prefix
 }
 type User struct {
 	ID        int64  `json:"id"`
@@ -53,6 +56,7 @@ type Server struct {
 	web       http.Handler
 	csp       string
 	traffic   *traffic.Client
+	limiter   *requestLimiter
 }
 
 func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
@@ -61,7 +65,7 @@ func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
 	if strings.TrimSpace(cfg.UmamiShareURL) != "" {
 		stats, _ = traffic.New(cfg.UmamiShareURL) // Validated before starting HTTP.
 	}
-	return &Server{cfg: cfg, db: db, store: store, siteStore: sites.Store{DB: db}, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp, traffic: stats}
+	return &Server{cfg: cfg, db: db, store: store, siteStore: sites.Store{DB: db}, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp, traffic: stats, limiter: newRequestLimiter()}
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -69,6 +73,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(recoverRequest)
 	r.Use(requestTimeout(20 * time.Second))
 	r.Use(s.headers)
+	r.Use(s.authRateLimit)
 	r.Use(s.session)
 	r.Get("/api/groups", s.list)
 	r.Get("/api/sites", s.listSites)
@@ -84,6 +89,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/sites", s.adminSites)
 		r.Group(func(r chi.Router) {
 			r.Use(s.protectWrite)
+			r.Use(s.userWriteRateLimit)
 			r.Use(middleware.Throttle(32))
 			r.Delete("/users/{id}/identities/{provider}", s.adminUnbind)
 			r.Delete("/users/{id}", s.adminDeleteUser)
@@ -97,6 +103,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/api/my/sites", s.mySites)
 		r.Group(func(r chi.Router) {
 			r.Use(s.protectWrite)
+			r.Use(s.userWriteRateLimit)
 			r.Use(middleware.Throttle(32))
 			r.Post("/api/groups", s.save)
 			r.Post("/api/sites", s.saveSite)
@@ -109,10 +116,13 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Throttle(16))
+		r.Use(middleware.Throttle(8))
 		r.Get("/auth/qq", s.login)
-		r.Get("/auth/qq/callback", s.callback)
 		r.Get("/auth/{provider}", s.providerLogin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Throttle(16))
+		r.Get("/auth/qq/callback", s.callback)
 		r.Get("/auth/{provider}/callback", s.providerCallback)
 	})
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +174,12 @@ func failOperation(w http.ResponseWriter, r *http.Request, err error, event, rea
 	level := slog.LevelError
 	outcome := "failed"
 	switch {
+	case errors.Is(err, resources.ErrActiveQuota), errors.Is(err, resources.ErrTotalQuota):
+		status = http.StatusTooManyRequests
+		msg = err.Error()
+		level = slog.LevelWarn
+		outcome = "rejected"
+		reason = "resource_quota_exceeded"
 	case errors.Is(err, sites.ErrNotFound):
 		status = 404
 		msg = err.Error()

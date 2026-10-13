@@ -11,4 +11,9 @@ var identitiesSQL string
 //go:embed 003_sites.sql
 var sitesSQL string
 
-var SQL = initialSQL + "\n" + identitiesSQL + "\n" + sitesSQL
+//go:embed 004_resource_quotas.sql
+var quotasSQL string
+
+const Count = 4
+
+var SQL = initialSQL + "\n" + identitiesSQL + "\n" + sitesSQL + "\n" + quotasSQL

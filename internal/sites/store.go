@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"nailist/internal/logging"
+	"nailist/internal/resources"
 )
 
 type Store struct{ DB *pgxpool.Pool }
@@ -38,13 +39,14 @@ func (s Store) Save(ctx context.Context, owner, id int64, site Site) (Site, erro
 		operation = "sites.update"
 	}
 	ctx = logging.WithOperation(ctx, operation)
-	var row pgx.Row
+	var err error
 	if id == 0 {
-		row = s.DB.QueryRow(ctx, `INSERT INTO sites(owner_id,name,domain,organization) VALUES($1,$2,$3,$4) RETURNING id,updated_at`, owner, site.Name, site.Domain, site.Organization)
+		err = resources.Create(ctx, s.DB, owner, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `INSERT INTO sites(owner_id,name,domain,organization) VALUES($1,$2,$3,$4) RETURNING id,updated_at`, owner, site.Name, site.Domain, site.Organization).Scan(&site.ID, &site.UpdatedAt)
+		})
 	} else {
-		row = s.DB.QueryRow(ctx, `UPDATE sites SET name=$3,domain=$4,organization=$5,updated_at=now() WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL RETURNING id,updated_at`, id, owner, site.Name, site.Domain, site.Organization)
+		err = s.DB.QueryRow(ctx, `UPDATE sites SET name=$3,domain=$4,organization=$5,updated_at=now() WHERE id=$1 AND owner_id=$2 AND deleted_at IS NULL RETURNING id,updated_at`, id, owner, site.Name, site.Domain, site.Organization).Scan(&site.ID, &site.UpdatedAt)
 	}
-	err := row.Scan(&site.ID, &site.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return site, ErrNotFound
 	}

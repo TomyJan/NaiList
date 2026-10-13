@@ -63,6 +63,8 @@
 
 ## 排查方法
 
+`security.rate_limited` 为 WARN，包含 `scope`（`auth_start` / `auth_callback` / `user_write`）及 `retry_after_seconds`；限额与可信代理配置见 README。`peer_ip` 始终是 TCP 对端，不会被转发头覆盖。`resources.quota.checked` 为 DEBUG，记录锁内核对的所属账号、有效 / 含历史条数及上限；达到上传配额时业务拒绝为 WARN，`reason=resource_quota_exceeded`，不视为数据库故障。
+
 启动失败先找 `app.startup.failed` 的 `stage` 和 `hint`：`http_bind` 查端口占用/监听权限，`database_connect` 查目标/凭据/TLS/网络，`database_migrate` 查建表权限与迁移锁。启动未出现 `app.ready` 表示尚未就绪。
 
 登录问题按 `request_id` 检索 `auth.failed`，查看 `provider`、`stage`、`reason`；临时启用 DEBUG，沿 `auth.flow.*` → `auth.provider.*` → `upstream.request.*` / `db.query.*` 定位。OIDC token 校验仅记录固定拒绝原因，不写原始 claims；QQ 返回值记录错误码和字段是否存在，不写 OpenID/UnionID。
