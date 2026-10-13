@@ -6,7 +6,7 @@ RUN npm install --global "$(node -p 'require("./package.json").packageManager')"
 COPY web/ ./
 RUN pnpm run build
 
-FROM golang:1.25-alpine AS backend
+FROM golang:1.26.9-alpine AS backend
 ARG BUILD_VERSION
 WORKDIR /src
 COPY go.mod go.sum ./

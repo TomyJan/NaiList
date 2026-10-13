@@ -65,6 +65,8 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml
       - name: Tests including database integration
         run: go test -race -count=1 ./...
+      - name: Reachable Go vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Build backend
         run: go build ./cmd/server
 
@@ -89,6 +91,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level=high --registry=https://registry.npmjs.org
       - name: Format and typecheck
         run: |
           pnpm exec prettier --check src e2e '*.ts' package.json tsconfig.json index.html
