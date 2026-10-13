@@ -101,6 +101,8 @@ func (s *Server) Routes() http.Handler {
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)
 		r.Get("/api/my/sites", s.mySites)
+		// Revocation must remain available when business write quotas or slots are exhausted.
+		r.With(s.protectWrite, middleware.Throttle(8)).Post("/api/auth/logout", s.logout)
 		r.Group(func(r chi.Router) {
 			r.Use(s.protectWrite)
 			r.Use(s.userWriteRateLimit)
@@ -111,7 +113,6 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/api/sites/{id}", s.removeSite)
 			r.Put("/api/groups/{id}", s.save)
 			r.Delete("/api/groups/{id}", s.remove)
-			r.Post("/api/auth/logout", s.logout)
 			r.Post("/api/auth/bind/{provider}", s.bind)
 		})
 	})

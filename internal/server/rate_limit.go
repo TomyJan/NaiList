@@ -145,7 +145,8 @@ func (s *Server) authRateLimit(next http.Handler) http.Handler {
 			return
 		}
 		scope, perIP, global := "auth_start", 20, 120
-		if strings.HasSuffix(path, "/callback") {
+		parts := strings.Split(strings.TrimPrefix(path, "/auth/"), "/")
+		if r.Method == http.MethodGet && strings.HasPrefix(path, "/auth/") && len(parts) == 2 && parts[0] != "" && parts[1] == "callback" {
 			scope, perIP, global = "auth_callback", 60, 240
 		}
 		retry := s.limiter.allow(rateRule{scope + ":ip:" + s.clientIP(r), perIP, time.Minute}, rateRule{scope + ":global", global, time.Minute})
