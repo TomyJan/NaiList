@@ -10,7 +10,7 @@
 
 ## 奶蛙像素宠物
 
-`public/naiwa.png` 取自开源项目 [codex-pet-naiwa](https://github.com/sandytruant/codex-pet-naiwa)（奶蛙，Codex 像素宠物），**MIT License, Copyright (c) 2026 sandytruant**，可随本项目一同分发，需保留该版权声明。
+`public/naiwa.png` 取自开源项目 [codex-pet-naiwa](https://github.com/sandytruant/codex-pet-naiwa)（奶蛙，Codex 像素宠物），**MIT License, Copyright (c) 2026 sandytruant**，可随本项目一同分发，需保留版权及许可全文，见随素材分发的 [naiwa.LICENSE.txt](public/naiwa.LICENSE.txt)。
 
 - 原始素材：`spritesheet.webp`（1536×2288，8×11 网格，单元格 192×208，透明背景）
 - 取用范围：仅第 1 行第 1 格（待机姿态），裁去透明边后为 116×198
