@@ -13,6 +13,7 @@ import { api, ApiError, writeOptions } from "./api";
 import { AdminOverview } from "./AdminOverview";
 import { GroupForm } from "./GroupForm";
 import { SiteForm } from "./SiteForm";
+import { displayDomain } from "./site-input";
 import { clearSiteDraft } from "./site-drafts";
 import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
 import { notify } from "./notifications";
@@ -124,7 +125,7 @@ export function Admin({
   );
   const visibleSites = sites.filter((site) =>
     matches(
-      `${site.name} ${site.organization} ${site.domain} ${ownerLabel(site.ownerId)}`,
+      `${site.name} ${site.organization} ${site.domain} ${displayDomain(site.domain)} ${ownerLabel(site.ownerId)}`,
     ),
   );
   const label = page === "users" ? "用户" : page === "sites" ? "奶站" : "奶群";
@@ -411,7 +412,7 @@ export function Admin({
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      https://{site.domain}
+                      https://{displayDomain(site.domain)}
                     </a>
                     <p>所属账号：{ownerLabel(site.ownerId)}</p>
                   </div>

@@ -1,4 +1,5 @@
 import type { Site, SiteInput } from "./types";
+import { toUnicode } from "punycode/";
 
 export function normalizeDomain(value: string): string {
   const domain = value
@@ -13,6 +14,16 @@ export function normalizeDomain(value: string): string {
     return domain;
   try {
     return new URL(`https://${domain}`).hostname;
+  } catch {
+    return domain;
+  }
+}
+
+export function displayDomain(domain: string): string {
+  try {
+    const unicode = toUnicode(domain);
+    // Preserve incomplete drafts and malformed labels instead of losing text.
+    return normalizeDomain(unicode) === domain.toLowerCase() ? unicode : domain;
   } catch {
     return domain;
   }
@@ -37,7 +48,7 @@ export function validateSiteInput(input: SiteInput): string | null {
 export function filterSites(sites: readonly Site[], query: string): Site[] {
   const term = query.trim().toLocaleLowerCase();
   return sites.filter((site) =>
-    `${site.name} ${site.organization} ${site.domain}`
+    `${site.name} ${site.organization} ${site.domain} ${displayDomain(site.domain)}`
       .toLocaleLowerCase()
       .includes(term),
   );

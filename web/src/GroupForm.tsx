@@ -13,6 +13,7 @@ import {
 } from "./group-drafts";
 import { notify } from "./notifications";
 import { OwnerPicker } from "./OwnerPicker";
+import { displayDomain } from "./site-input";
 import type { AdminUser, Group, GroupInput, Site } from "./types";
 
 export function GroupForm({
@@ -284,7 +285,7 @@ export function DeleteDialog({
       <p className="delete-name">
         {"qqNumber" in group
           ? `${group.organization} · ${group.qqNumber}`
-          : `${group.name} · ${group.domain}`}
+          : `${group.name} · ${displayDomain(group.domain)}`}
       </p>
       <div className="modal-actions">
         <button className="secondary" onClick={onClose} disabled={busy}>

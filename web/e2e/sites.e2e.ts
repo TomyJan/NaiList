@@ -1,12 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 
-async function mockSites(page: Page, admin = false) {
+async function mockSites(
+  page: Page,
+  admin = false,
+  domain = "lut.example.com",
+) {
   let records = [
     {
       id: 1,
       name: "兰理奶站",
       organization: "兰州理工大学",
-      domain: "lut.example.com",
+      domain,
       ownerId: 1,
       updatedAt: "",
     },
@@ -219,6 +223,9 @@ test("中文域名可添加和编辑，提交规范域名", async ({ page }) => 
   await page.getByRole("tab", { name: "奶站列表" }).click();
   await page.getByRole("button", { name: "添加奶站", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByText("求您也在贵站添加本站友链喵", { exact: true }),
+  ).toBeVisible();
   await dialog.getByLabel("站点名称", { exact: true }).fill("甘肃奶龙大学");
   await dialog.getByLabel("学校 / 单位", { exact: true }).fill("兰州理工大学");
   await dialog
@@ -232,13 +239,74 @@ test("中文域名可添加和编辑，提交规范域名", async ({ page }) => 
     domain: "xn--psszg58cy52cu6lj57b.com",
   };
   expect(calls.find((call) => call.method === "POST")?.body).toEqual(input);
+  await expect(
+    page.locator(".site-domain").filter({ hasText: "甘肃奶龙大学.com" }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "编辑 甘肃奶龙大学", exact: true })
     .click();
+  await expect(dialog.getByLabel("站点域名", { exact: true })).toHaveValue(
+    "甘肃奶龙大学.com",
+  );
+  await dialog.getByLabel("站点域名", { exact: true }).fill(input.domain);
+  await dialog.getByLabel("站点域名", { exact: true }).press("Tab");
+  await expect(dialog.getByLabel("站点域名", { exact: true })).toHaveValue(
+    "甘肃奶龙大学.com",
+  );
   await dialog.getByLabel("站点域名", { exact: true }).fill("甘肃奶龙大学.com");
   await dialog.getByRole("button", { name: "保存", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(calls.find((call) => call.method === "PUT")?.body).toEqual(input);
+  await page
+    .getByRole("button", { name: "删除 甘肃奶龙大学", exact: true })
+    .click();
+  await expect(dialog.locator(".delete-name")).toContainText(
+    "甘肃奶龙大学.com",
+  );
+});
+
+test("首页和后台显示中文域名并可搜索，跳转和编辑提交保持 Punycode", async ({
+  page,
+}) => {
+  const domain = "xn--psszg58cy52cu6lj57b.com";
+  const calls = await mockSites(page, true, domain);
+  await page.goto("/");
+  await page.getByRole("tab", { name: "奶站列表" }).click();
+  await expect(
+    page.locator(".site-domain").filter({ hasText: "甘肃奶龙大学.com" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "搜索奶站", exact: true })
+    .fill("甘肃奶龙大学");
+  await expect(page.locator(".site-row")).toHaveCount(1);
+  await expect(page.locator(".site-row a")).toHaveAttribute(
+    "href",
+    `https://${domain}`,
+  );
+  await page.goto("/admin/sites");
+  await page
+    .getByRole("textbox", { name: "搜索奶站", exact: true })
+    .fill("甘肃奶龙大学");
+  await expect(page.locator(".site-row")).toHaveCount(1);
+  await expect(page.locator(".admin-full-link")).toHaveText(
+    "https://甘肃奶龙大学.com",
+  );
+  await expect(page.locator(".admin-full-link")).toHaveAttribute(
+    "href",
+    `https://${domain}`,
+  );
+  await page
+    .getByRole("button", { name: "编辑 兰理奶站", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("站点域名", { exact: true })).toHaveValue(
+    "甘肃奶龙大学.com",
+  );
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(calls.find((call) => call.method === "PUT")?.body).toMatchObject({
+    domain,
+  });
 });
 
 test("后台导航统一、用户描述、奶站归属修改及删除保护", async ({ page }) => {

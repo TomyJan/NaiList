@@ -119,6 +119,20 @@ func TestPostgresSitesLifecycle(t *testing.T) {
 		t.Fatalf("Chinese domain: %s %v", w.Body.String(), err)
 	}
 	expect(request("POST", "/api/sites", strings.Replace(chineseBody, "甘肃奶龙大学.com", saved.Domain, 1), token, "csrf"), 409)
+	chinesePath := fmt.Sprintf("/api/sites/%d", saved.ID)
+	expect(request("PUT", chinesePath, chineseBody, token, "csrf"), 200)
+	w = request("POST", "/api/sites", strings.Replace(chineseBody, "甘肃奶龙大学.com", "other.example.com", 1), token, "csrf")
+	expect(w, 201)
+	if err := json.Unmarshal(w.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	expect(request("PUT", fmt.Sprintf("/api/sites/%d", saved.ID), chineseBody, token, "csrf"), 409)
+	adminConflict := strings.TrimSuffix(chineseBody, "}") + fmt.Sprintf(`,"ownerId":%d}`, actor)
+	w = request("PUT", fmt.Sprintf("/api/admin/sites/%d", saved.ID), adminConflict, token, "csrf")
+	expect(w, 409)
+	if !strings.Contains(w.Body.String(), "此域名已存在, 请前往首页搜索查看") {
+		t.Fatal(w.Body.String())
+	}
 }
 
 func TestPostgresSiteDomainUniquenessAndSoftDelete(t *testing.T) {

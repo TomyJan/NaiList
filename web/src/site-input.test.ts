@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { filterSites, normalizeDomain, validateSiteInput } from "./site-input";
+import {
+  displayDomain,
+  filterSites,
+  normalizeDomain,
+  validateSiteInput,
+} from "./site-input";
 
 describe("奶站域名", () => {
   it.each([
@@ -88,5 +93,32 @@ describe("奶站本地搜索", () => {
   it("空搜索保留顺序，未匹配返回空", () => {
     expect(filterSites(sites, " ")).toEqual(sites);
     expect(filterSites(sites, "其他")).toEqual([]);
+  });
+  it.each(["甘肃奶龙大学", "xn--psszg58cy52cu6lj57b.com"])(
+    "搜索中文域名 %s",
+    (query) => {
+      const sites = [
+        {
+          id: 2,
+          name: "独立站点",
+          organization: "学校",
+          domain: "xn--psszg58cy52cu6lj57b.com",
+          updatedAt: "",
+        },
+      ];
+      expect(filterSites(sites, query)).toEqual(sites);
+    },
+  );
+});
+
+describe("域名显示", () => {
+  it.each([
+    ["xn--psszg58cy52cu6lj57b.com", "甘肃奶龙大学.com"],
+    ["lut.example.com", "lut.example.com"],
+    ["甘肃奶龙大学.com", "甘肃奶龙大学.com"],
+    ["xn--.com", "xn--.com"],
+    ["", ""],
+  ])("显示 %s", (domain, expected) => {
+    expect(displayDomain(domain)).toBe(expected);
   });
 });

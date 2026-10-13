@@ -19,7 +19,7 @@ import { ListTabs, type ListKind } from "./ListTabs";
 import { clearGroupDraft } from "./group-drafts";
 import { clearSiteDraft } from "./site-drafts";
 import { filterGroups } from "./search";
-import { filterSites } from "./site-input";
+import { displayDomain, filterSites } from "./site-input";
 import { shuffleGroups } from "./group-order";
 import { notify } from "./notifications";
 import { Presence, RefreshIcon } from "./motion";
@@ -371,7 +371,9 @@ export function Directory({
                           </div>
                         </div>
                         <div className="group-actions">
-                          <span className="site-domain">{site.domain}</span>
+                          <span className="site-domain">
+                            {displayDomain(site.domain)}
+                          </span>
                           <a
                             className="join-button"
                             aria-label={`访问 ${site.name}`}

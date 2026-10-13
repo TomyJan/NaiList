@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { MotionDialog } from "./motion";
 import { Undo2, X } from "lucide-react";
-import { normalizeDomain, validateSiteInput } from "./site-input";
+import {
+  displayDomain,
+  normalizeDomain,
+  validateSiteInput,
+} from "./site-input";
 import { readSiteDraft, writeSiteDraft, type SiteDraft } from "./site-drafts";
 import { OwnerPicker } from "./OwnerPicker";
 import { notify } from "./notifications";
@@ -25,14 +29,14 @@ export function SiteForm({
   const scope = ownership ? "admin" : "personal";
   const [original] = useState<SiteDraft>(() => ({
     name: site?.name ?? "",
-    domain: site?.domain ?? "",
+    domain: displayDomain(site?.domain ?? ""),
     organization: site?.organization ?? "",
     ...(ownership ? { ownerId: ownership.ownerId } : {}),
   }));
-  const [input, setInput] = useState<SiteDraft>(() => ({
-    ...original,
-    ...readSiteDraft(accountID, site?.id, scope),
-  }));
+  const [input, setInput] = useState<SiteDraft>(() => {
+    const draft = { ...original, ...readSiteDraft(accountID, site?.id, scope) };
+    return { ...draft, domain: displayDomain(draft.domain) };
+  });
   const [busy, setBusy] = useState(false);
   const [ownerRevision, setOwnerRevision] = useState(0);
   useEffect(() => {
@@ -155,13 +159,18 @@ export function SiteForm({
               spellCheck={false}
               onChange={(event) => field("domain", event.target.value)}
               onBlur={(event) =>
-                field("domain", normalizeDomain(event.target.value))
+                field(
+                  "domain",
+                  displayDomain(normalizeDomain(event.target.value)),
+                )
               }
               onPaste={(event) => {
                 event.preventDefault();
                 field(
                   "domain",
-                  normalizeDomain(event.clipboardData.getData("text")),
+                  displayDomain(
+                    normalizeDomain(event.clipboardData.getData("text")),
+                  ),
                 );
               }}
               placeholder="甘肃奶龙大学.com"
@@ -170,6 +179,7 @@ export function SiteForm({
           <p className="field-help" id="site-domain-help">
             可粘贴完整链接，自动去除协议、www. 和路径；仅支持 HTTPS
           </p>
+          <p className="field-help">求您也在贵站添加本站友链喵</p>
         </div>
         <label>
           <span className="site-field-label">
