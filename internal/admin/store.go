@@ -16,14 +16,16 @@ import (
 var ErrNotFound = errors.New("账号或登录方式不存在")
 var ErrLastIdentity = errors.New("至少保留一种登录方式")
 var ErrOwnAccount = errors.New("不能删除当前管理员账号")
+var ErrActiveSites = errors.New("请先转移该账号的有效站点")
 var ErrActiveGroups = errors.New("请先转移该账号的有效奶群")
 
 type Store struct{ DB *pgxpool.Pool }
-type MutationStats struct{ RevokedSessions, DeletedFlows, DeletedIdentities, DeletedGroups int64 }
+type MutationStats struct{ RevokedSessions, DeletedFlows, DeletedIdentities, DeletedGroups, DeletedSites int64 }
 type User struct {
 	ID         int64               `json:"id"`
 	Nickname   string              `json:"nickname"`
 	AvatarURL  string              `json:"avatarUrl"`
+	SiteCount  int64               `json:"siteCount"`
 	GroupCount int64               `json:"groupCount"`
 	Identities []accounts.Identity `json:"identities"`
 }
@@ -34,7 +36,7 @@ type Group struct {
 
 func (s Store) Users(ctx context.Context) ([]User, error) {
 	// One statement keeps users, counts and bindings on the same database snapshot.
-	rows, err := s.DB.Query(ctx, `SELECT u.id,u.nickname,u.avatar_url,(SELECT count(*) FROM groups g WHERE g.owner_id=u.id AND g.deleted_at IS NULL),COALESCE(i.provider_id,''),COALESCE(i.nickname,''),COALESCE(i.avatar_url,'') FROM users u LEFT JOIN identities i ON i.user_id=u.id ORDER BY u.id,i.created_at,i.id`)
+	rows, err := s.DB.Query(ctx, `SELECT u.id,u.nickname,u.avatar_url,(SELECT count(*) FROM groups g WHERE g.owner_id=u.id AND g.deleted_at IS NULL),(SELECT count(*) FROM sites s WHERE s.owner_id=u.id AND s.deleted_at IS NULL),COALESCE(i.provider_id,''),COALESCE(i.nickname,''),COALESCE(i.avatar_url,'') FROM users u LEFT JOIN identities i ON i.user_id=u.id ORDER BY u.id,i.created_at,i.id`)
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
 	}
@@ -43,7 +45,7 @@ func (s Store) Users(ctx context.Context) ([]User, error) {
 	for rows.Next() {
 		var u User
 		var i accounts.Identity
-		if err := rows.Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.GroupCount, &i.ProviderID, &i.Nickname, &i.AvatarURL); err != nil {
+		if err := rows.Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.GroupCount, &u.SiteCount, &i.ProviderID, &i.Nickname, &i.AvatarURL); err != nil {
 			return nil, err
 		}
 		if len(out) == 0 || out[len(out)-1].ID != u.ID {
@@ -90,7 +92,7 @@ func lockUser(ctx context.Context, tx pgx.Tx, id int64) error {
 }
 func stage(ctx context.Context, stage string, args ...any) {
 	fields := append([]any{"component", "admin", "event", "admin.transaction.stage", "stage", stage}, args...)
-	message := map[string]string{"lock_user": "锁定目标账号，串行执行绑定及删除约束检查", "lock_owner": "锁定目标所属账号，协调账号删除与奶群转移", "identity_count": "已检查目标账号剩余登录方式", "delete_identity": "准备删除指定登录方式", "resources_revoked": "已在事务中撤销会话及待完成绑定流程", "cleanup": "已在事务中清理账号历史资源", "commit": "全部管理变更已写入事务，准备提交"}[stage]
+	message := map[string]string{"lock_user": "锁定目标账号，串行执行绑定及删除约束检查", "lock_owner": "锁定目标所属账号，协调账号删除与资源转移", "identity_count": "已检查目标账号剩余登录方式", "delete_identity": "准备删除指定登录方式", "resources_revoked": "已在事务中撤销会话及待完成绑定流程", "cleanup": "已在事务中清理账号历史资源", "commit": "全部管理变更已写入事务，准备提交"}[stage]
 	logging.FromContext(ctx).DebugContext(ctx, message, fields...)
 }
 func revoke(ctx context.Context, tx pgx.Tx, id int64) (MutationStats, error) {
@@ -165,10 +167,21 @@ func (s Store) DeleteUser(ctx context.Context, actor, id int64) (MutationStats, 
 	if active {
 		return MutationStats{}, ErrActiveGroups
 	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sites WHERE owner_id=$1 AND deleted_at IS NULL)`, id).Scan(&active); err != nil {
+		return MutationStats{}, err
+	}
+	if active {
+		return MutationStats{}, ErrActiveSites
+	}
 	revoked, err := revoke(ctx, tx, id)
 	if err != nil {
 		return MutationStats{}, err
 	}
+	tag, err := tx.Exec(ctx, `DELETE FROM sites WHERE owner_id=$1`, id)
+	if err != nil {
+		return MutationStats{}, err
+	}
+	revoked.DeletedSites = tag.RowsAffected()
 	for index, q := range []string{`DELETE FROM groups WHERE owner_id=$1`, `DELETE FROM identities WHERE user_id=$1`, `DELETE FROM users WHERE id=$1`} {
 		tag, deleteErr := tx.Exec(ctx, q, id)
 		if deleteErr != nil {
@@ -181,7 +194,7 @@ func (s Store) DeleteUser(ctx context.Context, actor, id int64) (MutationStats, 
 			revoked.DeletedIdentities = tag.RowsAffected()
 		}
 	}
-	stage(ctx, "cleanup", "account_id", id, "deleted_groups", revoked.DeletedGroups, "deleted_identities", revoked.DeletedIdentities)
+	stage(ctx, "cleanup", "account_id", id, "deleted_groups", revoked.DeletedGroups, "deleted_sites", revoked.DeletedSites, "deleted_identities", revoked.DeletedIdentities)
 	stage(ctx, "commit", "account_id", id)
 	if err = tx.Commit(ctx); err != nil {
 		return MutationStats{}, err

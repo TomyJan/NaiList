@@ -9,10 +9,12 @@ type DailyStats struct {
 	Date   string `json:"date"`
 	Users  int64  `json:"users"`
 	Groups int64  `json:"groups"`
+	Sites  int64  `json:"sites"`
 }
 type Stats struct {
 	Users         int64        `json:"users"`
 	Groups        int64        `json:"groups"`
+	Sites         int64        `json:"sites"`
 	Contributors  int64        `json:"contributors"`
 	Organizations int64        `json:"organizations"`
 	Daily         []DailyStats `json:"daily"`
@@ -27,28 +29,42 @@ WITH bounds AS (
 ), calendar AS (
     SELECT today - offset_day AS day FROM bounds CROSS JOIN generate_series(0,29) AS offset_day
 ), user_days AS (
-    SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS count
+       SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS count
     FROM users, bounds
     WHERE created_at >= ((today - 29)::timestamp AT TIME ZONE 'Asia/Shanghai')
-      AND created_at < ((today + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-    GROUP BY 1
+           AND created_at < ((today + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+       GROUP BY 1
 ), group_days AS (
-    SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS count
+       SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS count
     FROM groups, bounds
+       WHERE deleted_at IS NULL
+           AND created_at >= ((today - 29)::timestamp AT TIME ZONE 'Asia/Shanghai')
+           AND created_at < ((today + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+       GROUP BY 1
+), site_days AS (
+    SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS count
+    FROM sites, bounds
     WHERE deleted_at IS NULL
       AND created_at >= ((today - 29)::timestamp AT TIME ZONE 'Asia/Shanghai')
       AND created_at < ((today + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
     GROUP BY 1
+), resources AS (
+    SELECT owner_id, organization FROM groups    WHERE deleted_at IS NULL
+    UNION ALL
+    SELECT owner_id, organization FROM sites    WHERE deleted_at IS NULL
 ), totals AS (
-    SELECT (SELECT count(*) FROM users) AS users, count(*) AS groups,
+    SELECT        (SELECT count(*) FROM users) AS users,
+        (SELECT count(*) FROM groups    WHERE deleted_at IS NULL) AS groups,
+        (SELECT count(*) FROM sites    WHERE deleted_at IS NULL) AS sites,
         count(DISTINCT owner_id) AS contributors, count(DISTINCT organization) AS organizations
-    FROM groups WHERE deleted_at IS NULL
+    FROM resources
 )
-SELECT totals.users, totals.groups, totals.contributors, totals.organizations,
-    to_char(calendar.day,'YYYY-MM-DD'), COALESCE(user_days.count,0), COALESCE(group_days.count,0)
+SELECT totals.users, totals.groups, totals.sites, totals.contributors, totals.organizations,
+    to_char(calendar.day,'YYYY-MM-DD'), COALESCE(user_days.count,0), COALESCE(group_days.count,0), COALESCE(site_days.count,0)
 FROM calendar CROSS JOIN totals
 LEFT JOIN user_days ON user_days.day=calendar.day
 LEFT JOIN group_days ON group_days.day=calendar.day
+LEFT JOIN site_days ON site_days.day=calendar.day
 ORDER BY calendar.day`)
 	if err != nil {
 		return Stats{}, fmt.Errorf("query admin statistics: %w", err)
@@ -57,7 +73,7 @@ ORDER BY calendar.day`)
 	out := Stats{Daily: make([]DailyStats, 0, 30)}
 	for rows.Next() {
 		var day DailyStats
-		if err := rows.Scan(&out.Users, &out.Groups, &out.Contributors, &out.Organizations, &day.Date, &day.Users, &day.Groups); err != nil {
+		if err := rows.Scan(&out.Users, &out.Groups, &out.Sites, &out.Contributors, &out.Organizations, &day.Date, &day.Users, &day.Groups, &day.Sites); err != nil {
 			return Stats{}, fmt.Errorf("scan admin statistics: %w", err)
 		}
 		out.Daily = append(out.Daily, day)

@@ -24,7 +24,7 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 }
 func (s *Server) adminUsers(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	requestLogger(r).DebugContext(r.Context(), "开始读取全站账号、有效奶群计数及公开登录方式", "component", "admin", "event", "admin.users.list.started")
+	requestLogger(r).DebugContext(r.Context(), "开始读取全站账号、有效奶群及站点计数与公开登录方式", "component", "admin", "event", "admin.users.list.started")
 	users, err := (admin.Store{DB: s.db}).Users(r.Context())
 	if err != nil {
 		failure(w, r, err)
@@ -60,6 +60,8 @@ func adminError(w http.ResponseWriter, r *http.Request, err error) {
 		rejectRequest(w, r, 409, "admin.write.rejected", "last_identity", err.Error())
 	case errors.Is(err, admin.ErrOwnAccount):
 		rejectRequest(w, r, 409, "admin.write.rejected", "self_delete", err.Error())
+	case errors.Is(err, admin.ErrActiveSites):
+		rejectRequest(w, r, 409, "admin.write.rejected", "active_sites", err.Error())
 	case errors.Is(err, admin.ErrActiveGroups):
 		rejectRequest(w, r, 409, "admin.write.rejected", "active_groups", err.Error())
 	default:
@@ -95,7 +97,7 @@ func (s *Server) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		adminError(w, r, err)
 		return
 	}
-	requestLogger(r).InfoContext(r.Context(), "管理员已删除账号及历史资源", "component", "admin", "event", "admin.user.deleted", "outcome", "success", "admin_id", actor, "account_id", id, "revoked_sessions", revoked.RevokedSessions, "deleted_flows", revoked.DeletedFlows, "deleted_identities", revoked.DeletedIdentities, "deleted_groups", revoked.DeletedGroups, "duration_ms", logging.DurationMS(started))
+	requestLogger(r).InfoContext(r.Context(), "管理员已删除账号及历史资源", "component", "admin", "event", "admin.user.deleted", "outcome", "success", "admin_id", actor, "account_id", id, "revoked_sessions", revoked.RevokedSessions, "deleted_flows", revoked.DeletedFlows, "deleted_identities", revoked.DeletedIdentities, "deleted_groups", revoked.DeletedGroups, "deleted_sites", revoked.DeletedSites, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
 }
 func (s *Server) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
@@ -141,12 +143,12 @@ func (s *Server) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminStats(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	requestLogger(r).DebugContext(r.Context(), "开始聚合站点概览及近 30 天新增趋势", "component", "admin", "event", "admin.stats.started", "timezone", "Asia/Shanghai", "days", 30, "scope", "current_users_active_groups")
+	requestLogger(r).DebugContext(r.Context(), "开始聚合站点概览及近 30 天新增趋势", "component", "admin", "event", "admin.stats.started", "timezone", "Asia/Shanghai", "days", 30, "scope", "current_users_active_groups_sites")
 	stats, err := (admin.Store{DB: s.db}).Stats(r.Context())
 	if err != nil {
 		failure(w, r, err)
 		return
 	}
-	requestLogger(r).DebugContext(r.Context(), "站点统计聚合完成，日期缺口已补零", "component", "admin", "event", "admin.stats.completed", "users", stats.Users, "groups", stats.Groups, "contributors", stats.Contributors, "organizations", stats.Organizations, "days", len(stats.Daily), "duration_ms", logging.DurationMS(started))
+	requestLogger(r).DebugContext(r.Context(), "站点统计聚合完成，日期缺口已补零", "component", "admin", "event", "admin.stats.completed", "users", stats.Users, "groups", stats.Groups, "sites", stats.Sites, "contributors", stats.Contributors, "organizations", stats.Organizations, "days", len(stats.Daily), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, stats)
 }

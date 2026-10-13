@@ -8,4 +8,7 @@ var initialSQL string
 //go:embed 002_identities.sql
 var identitiesSQL string
 
-var SQL = initialSQL + "\n" + identitiesSQL
+//go:embed 003_sites.sql
+var sitesSQL string
+
+var SQL = initialSQL + "\n" + identitiesSQL + "\n" + sitesSQL

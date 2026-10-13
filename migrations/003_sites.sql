@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS sites (
+ id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ owner_id BIGINT NOT NULL REFERENCES users(id),
+ name VARCHAR(32) NOT NULL,
+ domain VARCHAR(253) NOT NULL,
+ organization VARCHAR(32) NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ deleted_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS sites_active_domain ON sites(lower(domain)) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS sites_owner ON sites(owner_id) WHERE deleted_at IS NULL;

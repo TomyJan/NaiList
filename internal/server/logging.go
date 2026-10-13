@@ -85,6 +85,20 @@ func requestOperation(r *http.Request) (string, string) {
 		return "admin.stats", "获取站点统计与每日新增趋势"
 	case path == "/api/admin/users" && r.Method == "GET":
 		return "admin.users.list", "获取全站账号与登录方式"
+	case path == "/api/admin/sites" && r.Method == "GET":
+		return "admin.sites.list", "获取全站站点与归属"
+	case strings.HasPrefix(path, "/api/admin/sites/"):
+		return "admin.site.update", "管理员更新站点与归属"
+	case path == "/api/sites" && r.Method == "GET":
+		return "sites.list", "获取公开站点列表"
+	case path == "/api/my/sites":
+		return "sites.mine", "获取本人站点列表"
+	case path == "/api/sites" && r.Method == "POST":
+		return "sites.create", "添加站点"
+	case strings.HasPrefix(path, "/api/sites/") && r.Method == "PUT":
+		return "sites.update", "修改站点"
+	case strings.HasPrefix(path, "/api/sites/") && r.Method == "DELETE":
+		return "sites.delete", "删除站点"
 	case path == "/api/admin/groups" && r.Method == "GET":
 		return "admin.groups.list", "获取全站奶群与归属"
 	case strings.HasPrefix(path, "/api/admin/users/") && strings.Contains(path, "/identities/"):
@@ -117,7 +131,7 @@ func requestOperation(r *http.Request) (string, string) {
 		return "auth.begin", "发起登录授权"
 	case path == "/api/health":
 		return "health.check", "检查服务与数据库健康"
-	case path == "/" || path == "/manage" || path == "/admin" || path == "/admin/" || path == "/admin/users" || path == "/admin/groups" || path == "/index.html":
+	case path == "/" || path == "/manage" || path == "/admin" || path == "/admin/" || path == "/admin/users" || path == "/admin/groups" || path == "/admin/sites" || path == "/index.html":
 		return "web.page", "加载应用页面"
 	case strings.HasPrefix(path, "/api/"):
 		return "http.unmatched", "访问未匹配接口"

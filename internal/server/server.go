@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"nailist/internal/groups"
 	"nailist/internal/logging"
+	"nailist/internal/sites"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -42,17 +43,18 @@ type GroupStore interface {
 	Delete(context.Context, int64, int64) error
 }
 type Server struct {
-	cfg    Config
-	db     *pgxpool.Pool
-	store  GroupStore
-	client *http.Client
-	web    http.Handler
-	csp    string
+	cfg       Config
+	db        *pgxpool.Pool
+	store     GroupStore
+	siteStore SiteStore
+	client    *http.Client
+	web       http.Handler
+	csp       string
 }
 
 func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
 	web, csp := newWebHandler(cfg)
-	return &Server{cfg: cfg, db: db, store: store, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp}
+	return &Server{cfg: cfg, db: db, store: store, siteStore: sites.Store{DB: db}, client: &http.Client{Timeout: 15 * time.Second}, web: web, csp: csp}
 }
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -62,6 +64,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(s.headers)
 	r.Use(s.session)
 	r.Get("/api/groups", s.list)
+	r.Get("/api/sites", s.listSites)
 	r.Get("/api/me", s.me)
 	r.Get("/api/auth/providers", s.authProviders)
 	r.Route("/api/admin", func(r chi.Router) {
@@ -70,21 +73,27 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/stats", s.adminStats)
 		r.Get("/users", s.adminUsers)
 		r.Get("/groups", s.adminGroups)
+		r.Get("/sites", s.adminSites)
 		r.Group(func(r chi.Router) {
 			r.Use(s.protectWrite)
 			r.Use(middleware.Throttle(32))
 			r.Delete("/users/{id}/identities/{provider}", s.adminUnbind)
 			r.Delete("/users/{id}", s.adminDeleteUser)
 			r.Put("/groups/{id}", s.adminSaveGroup)
+			r.Put("/sites/{id}", s.adminSaveSite)
 		})
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)
+		r.Get("/api/my/sites", s.mySites)
 		r.Group(func(r chi.Router) {
 			r.Use(s.protectWrite)
 			r.Use(middleware.Throttle(32))
 			r.Post("/api/groups", s.save)
+			r.Post("/api/sites", s.saveSite)
+			r.Put("/api/sites/{id}", s.saveSite)
+			r.Delete("/api/sites/{id}", s.removeSite)
 			r.Put("/api/groups/{id}", s.save)
 			r.Delete("/api/groups/{id}", s.remove)
 			r.Post("/api/auth/logout", s.logout)
@@ -147,6 +156,18 @@ func failOperation(w http.ResponseWriter, r *http.Request, err error, event, rea
 	level := slog.LevelError
 	outcome := "failed"
 	switch {
+	case errors.Is(err, sites.ErrNotFound):
+		status = 404
+		msg = err.Error()
+		level = slog.LevelDebug
+		outcome = "rejected"
+		reason = "not_found_or_not_owned"
+	case errors.Is(err, sites.ErrDuplicate):
+		status = 409
+		msg = err.Error()
+		level = slog.LevelWarn
+		outcome = "rejected"
+		reason = "duplicate_domain"
 	case errors.Is(err, groups.ErrNotFound):
 		status = 404
 		msg = err.Error()
