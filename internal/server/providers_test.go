@@ -26,6 +26,10 @@ type oidcFixture struct {
 	nonce, verifier, audience, subject string
 	expired, invalidSignature          bool
 	exchanges                          int
+	profile, userInfo                  map[string]any
+	userInfoStatus                     int
+	userInfoEndpoint                   string
+	userInfoCalls                      int
 }
 
 func (f *oidcFixture) count() int { f.mu.Lock(); defer f.mu.Unlock(); return f.exchanges }
@@ -50,7 +54,7 @@ func newOIDCFixture(t *testing.T) *oidcFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &oidcFixture{audience: "client", subject: "oidc-user"}
+	f := &oidcFixture{audience: "client", subject: "oidc-user", profile: map[string]any{"name": "校园用户", "picture": "https://id.example/avatar.png"}}
 	f.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -58,7 +62,14 @@ func newOIDCFixture(t *testing.T) *oidcFixture {
 		issuer := f.server.URL
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
-			_ = json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}})
+			metadata := map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}
+			if f.userInfo != nil {
+				metadata["userinfo_endpoint"] = issuer + "/userinfo"
+			}
+			if f.userInfoEndpoint != "" {
+				metadata["userinfo_endpoint"] = f.userInfoEndpoint
+			}
+			_ = json.NewEncoder(w).Encode(metadata)
 		case "/keys":
 			_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "test", Algorithm: "RS256", Use: "sig"}}})
 		case "/token":
@@ -83,7 +94,10 @@ func newOIDCFixture(t *testing.T) *oidcFixture {
 			if f.expired {
 				expiry = time.Now().Add(-time.Hour)
 			}
-			claims := map[string]any{"iss": issuer, "aud": f.audience, "sub": f.subject, "exp": expiry.Unix(), "iat": time.Now().Unix(), "nonce": f.nonce, "name": "校园用户", "picture": "https://id.example/avatar.png"}
+			claims := map[string]any{"iss": issuer, "aud": f.audience, "sub": f.subject, "exp": expiry.Unix(), "iat": time.Now().Unix(), "nonce": f.nonce}
+			for name, value := range f.profile {
+				claims[name] = value
+			}
 			data, _ := json.Marshal(claims)
 			signed, err := signer.Sign(data)
 			if err != nil {
@@ -96,6 +110,18 @@ func newOIDCFixture(t *testing.T) *oidcFixture {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "access", "token_type": "Bearer", "expires_in": 3600, "id_token": raw})
+		case "/userinfo", "/userinfo-redirect":
+			f.userInfoCalls++
+			if r.Header.Get("Authorization") != "Bearer access" {
+				t.Error("UserInfo missing access token")
+			}
+			if f.userInfoStatus != 0 {
+				if f.userInfoStatus == http.StatusFound {
+					w.Header().Set("Location", issuer+"/userinfo-redirect")
+				}
+				w.WriteHeader(f.userInfoStatus)
+			}
+			_ = json.NewEncoder(w).Encode(f.userInfo)
 		default:
 			http.NotFound(w, r)
 		}
@@ -142,6 +168,65 @@ func TestOIDCVerifiedIdentityAndPKCE(t *testing.T) {
 			f.mu.Unlock()
 			if _, err := s.oidcIdentity(context.Background(), "code", "nonce", "verifier"); err == nil {
 				t.Fatal("invalid identity accepted")
+			}
+		})
+	}
+}
+
+func TestOIDCUserInfoProfileFallback(t *testing.T) {
+	f := newOIDCFixture(t)
+	const avatar = "https://id.example/userinfo-avatar.png"
+	for _, tc := range []struct {
+		name                 string
+		profile, userInfo    map[string]any
+		status               int
+		endpoint             string
+		wantName, wantAvatar string
+		wantReason           string
+		wantCalls            int
+	}{
+		{name: "profile only in UserInfo", userInfo: map[string]any{"sub": "oidc-user", "name": "UserInfo用户", "picture": avatar}, wantName: "UserInfo用户", wantAvatar: avatar, wantCalls: 1},
+		{name: "preserve ID Token nickname", profile: map[string]any{"preferred_username": "原昵称"}, userInfo: map[string]any{"sub": "oidc-user", "name": "新昵称", "picture": avatar}, wantName: "原昵称", wantAvatar: avatar, wantCalls: 1},
+		{name: "complete ID Token skips UserInfo", profile: map[string]any{"name": "校园用户", "picture": avatar}, userInfo: map[string]any{"sub": "other-user"}, wantName: "校园用户", wantAvatar: avatar},
+		{name: "preserve ID Token avatar", profile: map[string]any{"picture": avatar}, userInfo: map[string]any{"sub": "oidc-user", "preferred_username": "别名", "picture": "https://id.example/other.png"}, wantName: "别名", wantAvatar: avatar, wantCalls: 1},
+		{name: "no UserInfo endpoint", wantName: "校园用户"},
+		{name: "HTTP failure remains login compatible", userInfo: map[string]any{"private": "private-userinfo-body"}, status: 500, wantName: "校园用户", wantCalls: 1},
+		{name: "malformed profile remains login compatible", userInfo: map[string]any{"sub": "oidc-user", "name": "private-nickname", "picture": 42}, wantName: "校园用户", wantCalls: 1},
+		{name: "subject mismatch rejected", userInfo: map[string]any{"sub": "private-other-user", "picture": avatar}, wantReason: "userinfo_subject_mismatch", wantCalls: 1},
+		{name: "missing subject rejected", userInfo: map[string]any{"picture": avatar}, wantReason: "userinfo_subject_mismatch", wantCalls: 1},
+		{name: "HTTP avatar ignored", userInfo: map[string]any{"sub": "oidc-user", "picture": "http://id.example/avatar.png"}, wantName: "校园用户", wantCalls: 1},
+		{name: "credentialed avatar ignored", userInfo: map[string]any{"sub": "oidc-user", "picture": "https://private:secret@id.example/avatar.png"}, wantName: "校园用户", wantCalls: 1},
+		{name: "invalid ID Token avatar replaced", profile: map[string]any{"picture": "http://id.example/avatar.png"}, userInfo: map[string]any{"sub": "oidc-user", "picture": avatar}, wantName: "校园用户", wantAvatar: avatar, wantCalls: 1},
+		{name: "non HTTPS endpoint skipped", userInfo: map[string]any{"sub": "oidc-user", "picture": avatar}, endpoint: "http://insecure.example/userinfo", wantName: "校园用户"},
+		{name: "redirect not followed", userInfo: map[string]any{"sub": "oidc-user", "picture": avatar}, status: 302, wantName: "校园用户", wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f.mu.Lock()
+			f.profile, f.userInfo, f.userInfoStatus = tc.profile, tc.userInfo, tc.status
+			f.userInfoEndpoint, f.userInfoCalls = tc.endpoint, 0
+			f.nonce, f.verifier = "nonce", "verifier"
+			f.mu.Unlock()
+			s := New(f.config(), nil, &memoryGroups{})
+			s.client = f.server.Client()
+			ctx, output := authLogContext()
+			identity, err := s.oidcIdentity(ctx, "code", "nonce", "verifier")
+			if tc.wantReason != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantReason) {
+					t.Fatalf("expected %s, got %v", tc.wantReason, err)
+				}
+			} else if err != nil || identity.Nickname != tc.wantName || identity.AvatarURL != tc.wantAvatar || identity.Subject != "oidc-user" {
+				t.Fatalf("unexpected identity %#v, error %v", identity, err)
+			}
+			f.mu.Lock()
+			calls := f.userInfoCalls
+			f.mu.Unlock()
+			if calls != tc.wantCalls {
+				t.Errorf("UserInfo calls: got %d, want %d", calls, tc.wantCalls)
+			}
+			for _, secret := range []string{"private-userinfo-body", "private-other-user", "private-nickname", "userinfo-avatar.png", "Bearer access"} {
+				if strings.Contains(output.String(), secret) {
+					t.Errorf("logs leaked %s", secret)
+				}
 			}
 		})
 	}
@@ -285,6 +370,12 @@ func TestPostgresOIDCBindingFlowAndReplay(t *testing.T) {
 		t.Fatal("expired flow accepted")
 	}
 	// Login with the bound provider resolves to the original account.
+	// Some providers publish the avatar only in UserInfo. Re-login must also
+	// refresh the existing account's saved profile, not create another account.
+	f.mu.Lock()
+	f.profile = map[string]any{"name": "校园用户"}
+	f.userInfo = map[string]any{"sub": "oidc-user", "picture": "https://id.example/refreshed-avatar.png"}
+	f.mu.Unlock()
 	login := httptest.NewRecorder()
 	handler.ServeHTTP(login, httptest.NewRequest("GET", "/auth/campus", nil))
 	destination, _ = url.Parse(login.Header().Get("Location"))
@@ -309,6 +400,13 @@ func TestPostgresOIDCBindingFlowAndReplay(t *testing.T) {
 	handler.ServeHTTP(out, me)
 	if out.Code != 200 || !strings.Contains(out.Body.String(), "campus") || strings.Contains(out.Body.String(), "oidc-user") || strings.Contains(out.Body.String(), "issuer") {
 		t.Fatal("binding information leaked private identity", out.Body.String())
+	}
+	var current struct {
+		ID        int64  `json:"id"`
+		AvatarURL string `json:"avatarUrl"`
+	}
+	if err := json.Unmarshal(out.Body.Bytes(), &current); err != nil || current.ID != id || current.AvatarURL != "https://id.example/refreshed-avatar.png" {
+		t.Fatal("OIDC re-login did not update the existing account avatar", err)
 	}
 	unlink := httptest.NewRequest("DELETE", "/api/auth/bind/campus", nil)
 	unlink.AddCookie(session)

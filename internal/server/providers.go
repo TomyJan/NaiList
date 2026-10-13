@@ -255,13 +255,21 @@ func (s *Server) oidcIdentity(ctx context.Context, code, nonce, verifier string)
 	}
 	done("", nil, false, "nonce_matches", true, "subject_present", true)
 	done = providerStage(ctx, s.cfg.OIDC.ID, "claims")
-	var claims struct {
-		Name      string `json:"name"`
-		Preferred string `json:"preferred_username"`
-		Picture   string `json:"picture"`
-	}
+	var claims oidcProfile
 	if err = verified.Claims(&claims); err != nil {
 		return identity, done("claims_decode_failed", err, true)
+	}
+	if claims.Name == "" && claims.Preferred == "" || claims.avatarURL() == "" {
+		profile, err := s.oidcUserInfo(ctx, provider, token, verified.Subject)
+		if err != nil {
+			return identity, err
+		}
+		if claims.Name == "" && claims.Preferred == "" {
+			claims.Name, claims.Preferred = profile.Name, profile.Preferred
+		}
+		if claims.avatarURL() == "" {
+			claims.Picture = profile.Picture
+		}
 	}
 	identity.Subject = verified.Subject
 	identity.Nickname = claims.Name
@@ -271,11 +279,70 @@ func (s *Server) oidcIdentity(ctx context.Context, code, nonce, verifier string)
 	if identity.Nickname == "" {
 		identity.Nickname = s.cfg.OIDC.Name + "用户"
 	}
-	if u, err := url.Parse(claims.Picture); err == nil && u.Scheme == "https" && u.Host != "" {
-		identity.AvatarURL = claims.Picture
-	}
+	identity.AvatarURL = claims.avatarURL()
 	done("", nil, false, "name_present", claims.Name != "", "preferred_username_present", claims.Preferred != "", "picture_present", claims.Picture != "", "avatar_accepted", identity.AvatarURL != "", "nickname_fallback", claims.Name == "" && claims.Preferred == "")
 	return identity, nil
+}
+
+type oidcProfile struct {
+	Name      string `json:"name"`
+	Preferred string `json:"preferred_username"`
+	Picture   string `json:"picture"`
+}
+
+func (p oidcProfile) avatarURL() string {
+	if u, err := url.Parse(p.Picture); err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil {
+		return p.Picture
+	}
+	return ""
+}
+
+// UserInfo supplements the verified ID Token; an unavailable profile service must
+// not prevent login. A different subject, however, must never supply account data.
+func (s *Server) oidcUserInfo(ctx context.Context, provider *oidc.Provider, token *oauth2.Token, subject string) (oidcProfile, error) {
+	done := providerStage(ctx, s.cfg.OIDC.ID, "userinfo")
+	logger := logging.FromContext(ctx).With("component", "auth", "provider", s.cfg.OIDC.ID, "stage", "userinfo")
+	skip := func(reason string, cause error) (oidcProfile, error) {
+		done(reason, cause, false)
+		logger.WarnContext(ctx, "未能补充 OIDC 用户资料，继续使用已验证的 ID Token", "event", "auth.profile.unavailable", "reason", reason, "error_kind", logging.ErrorKind(cause))
+		return oidcProfile{}, nil
+	}
+	endpoint := provider.UserInfoEndpoint()
+	if endpoint == "" {
+		done("", nil, false, "outcome_detail", "endpoint_not_provided")
+		return oidcProfile{}, nil
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return skip("userinfo_endpoint_not_https", nil)
+	}
+	if token.AccessToken == "" {
+		return skip("userinfo_access_token_missing", nil)
+	}
+	// Keep optional profile lookup bounded and never forward a bearer token on redirects.
+	client := *s.client
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	lookupCtx = oidc.ClientContext(lookupCtx, logging.TraceClient(&client))
+	info, err := provider.UserInfo(lookupCtx, oauth2.StaticTokenSource(token))
+	if err != nil {
+		if ctx.Err() != nil {
+			return oidcProfile{}, done("userinfo_request_failed", ctx.Err(), false)
+		}
+		// The SDK's error can contain the entire provider response. Log only a
+		// fixed reason and error kind, never the error text or profile payload.
+		return skip("userinfo_request_failed", err)
+	}
+	if info.Subject != subject {
+		return oidcProfile{}, done("userinfo_subject_mismatch", nil, true, "subject_present", info.Subject != "", "subject_matches", false)
+	}
+	var profile oidcProfile
+	if err := info.Claims(&profile); err != nil {
+		return skip("userinfo_claims_decode_failed", err)
+	}
+	done("", nil, false, "subject_matches", true, "name_present", profile.Name != "", "preferred_username_present", profile.Preferred != "", "picture_present", profile.Picture != "", "avatar_accepted", profile.avatarURL() != "")
+	return profile, nil
 }
 
 // Provider libraries may include response bodies or raw claims in errors. Validation

@@ -179,6 +179,8 @@ OIDC_SCOPES=
 
 `OIDC_ID` 是稳定的小写登录方式标识，不能为 `qq`；客户端 ID 是独立的 `OIDC_CLIENT_ID`。名称必填，图标可选（HTTPS URL 或站内路径）。Issuer 需为 HTTPS，支持标准 OIDC discovery、授权码模式及 PKCE S256；注册精确回调 `https://群列表域名/auth/campus/callback`（campus 替换为实际 ID）。密钥对公开客户端可留空，默认请求 `openid profile`，额外 scope 用空格分隔。验证 ID Token 签名、issuer、audience、过期时间和 nonce，使用 issuer + sub 识别身份，密钥和 token 不返回前端。
 
+`profile` 已包含标准头像字段 `picture`，无需额外的头像 scope；登录服务仍需允许向该客户端提供此字段。ID Token 缺少昵称或有效头像时，会从 discovery 声明的 HTTPS UserInfo 接口补充，并核对 `sub` 与 ID Token 一致。头像仅接受不含用户名/密码的 HTTPS 地址；UserInfo 不可用时保留 ID Token 登录，身份不一致则拒绝登录。升级后退出并通过 OIDC 重新登录，可更新已保存的账号头像。若仍无头像，启用 DEBUG 查看 `userinfo` / `claims` 阶段的 `picture_present`、`avatar_accepted`；请求失败会产生 `auth.profile.unavailable` 警告。
+
 部署升级自动将旧 QQ 账号迁移到身份表，保留账号 ID、群归属和现有会话。首次登录原 QQ 应用会补齐身份所属应用。已有绑定后不要改 OIDC_ID / OIDC_ISSUER；显示名称和图标可调整。迁移前备份数据库。
 
 ## 站点管理

@@ -53,7 +53,8 @@
 | `http.request.panic` / `http.response.write_failed` | 异常堆栈、响应写入/刷新中断；已开始响应时不追加错误 JSON |
 | `groups.list.*` / `groups.save.*` / `groups.delete.*` | 查询范围/数量、校验拒绝、群 ID/学校/群号、保存或软删除结果；链接只记格式 |
 | `auth.session.lookup` / `auth.write.*` / `auth.access.rejected` | 会话缺失/命中/未知/过期/读取失败、来源与 CSRF 校验结果 |
-| `auth.flow.*` / `auth.provider.*` / `auth.failed` | 授权流程创建与消费、QQ token/身份/资料、OIDC discovery/token/签名/nonce/claims、明确失败阶段 |
+| `auth.flow.*` / `auth.provider.*` / `auth.failed` | 授权流程创建与消费、QQ token/身份/资料、OIDC discovery/token/签名/nonce/userinfo/claims、明确失败阶段 |
+| `auth.profile.unavailable` | WARN：OIDC UserInfo 补充资料失败，记录固定原因和错误类别，继续使用已验证的 ID Token 登录 |
 | `account.resolve.*` / `account.created` / `account.identity.bound` | 匹配/锁/复用或创建/身份更新/提交或回滚；身份值不写日志 |
 | `auth.login.completed` / `auth.binding.completed` / `auth.logout.*` | 登录会话写入成功、身份绑定成功、会话撤销 |
 | `db.query.*` / `db.connection.*` / `db.pool.acquired` / `db.pool.slow` | 语句指纹、执行耗时、连接与池等待、错误分类 |
@@ -65,6 +66,8 @@
 启动失败先找 `app.startup.failed` 的 `stage` 和 `hint`：`http_bind` 查端口占用/监听权限，`database_connect` 查目标/凭据/TLS/网络，`database_migrate` 查建表权限与迁移锁。启动未出现 `app.ready` 表示尚未就绪。
 
 登录问题按 `request_id` 检索 `auth.failed`，查看 `provider`、`stage`、`reason`；临时启用 DEBUG，沿 `auth.flow.*` → `auth.provider.*` → `upstream.request.*` / `db.query.*` 定位。OIDC token 校验仅记录固定拒绝原因，不写原始 claims；QQ 返回值记录错误码和字段是否存在，不写 OpenID/UnionID。
+
+OIDC 头像排查查看 `userinfo` 与 `claims` 阶段：`picture_present=false` 表示服务未返回头像字段，`avatar_accepted=false` 表示未取得有效 HTTPS 头像。UserInfo 请求最多等待 5 秒，不跟随重定向；`userinfo_subject_mismatch` 会拒绝登录。日志不记录 UserInfo 原文、头像 URL、昵称或 token。
 
 慢请求先看汇总 `duration_ms`，再比较数据库执行/池等待与上游网络时序；`statement_id` 可聚合同一语句。保存群号重复会出现 `reason=duplicate_qq_number`，属于业务拒绝。客户端取消以 `reason=client_canceled` 记录，通常无需按数据库故障处理。
 
