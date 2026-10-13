@@ -183,6 +183,21 @@ p {
   align-items: center;
   gap: 28px;
 }
+.audio-button {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #dbd6ca;
+  border-radius: 50%;
+  color: #8a6500;
+  background: #fff;
+}
+.audio-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
 .nav-link {
   color: #858176;
 }

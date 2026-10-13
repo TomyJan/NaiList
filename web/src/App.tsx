@@ -10,6 +10,7 @@ import { Notifications, notify } from "./notifications";
 import { SITE_VERSION, TRAFFIC_ENABLED } from "./runtime";
 import { TrafficStats } from "./TrafficStats";
 import { PageTransition, Presence } from "./motion";
+import { AudioButton } from "./AudioButton";
 import type { User, LoginProvider } from "./types";
 
 export default function App() {
@@ -164,6 +165,7 @@ export default function App() {
             <span>NaiList</span>
           </a>
           <div className="nav-right">
+            <AudioButton />
             {path !== "/" && (
               <a
                 className="nav-link"

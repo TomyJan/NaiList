@@ -35,6 +35,11 @@ func TestStartupWebInjection(t *testing.T) {
 				t.Fatalf("missing CSP directive %s: %s", directive, csp)
 			}
 		}
+		for _, directive := range []string{"https://cdn.amoe.cc/web-static/private/tomyjan-website/nailong/audio/", "media-src 'self' blob: https://cdn.amoe.cc/web-static/private/tomyjan-website/nailong/audio/"} {
+			if !strings.Contains(csp, directive) {
+				t.Fatalf("missing audio CSP permission %s: %s", directive, csp)
+			}
+		}
 		if out.Header().Get("Cache-Control") != "no-cache" {
 			t.Fatal("HTML must revalidate after restart")
 		}
