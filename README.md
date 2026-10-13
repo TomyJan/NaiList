@@ -23,7 +23,28 @@ UMAMI_SCRIPT_URL=https://统计域名/script.js
 UMAMI_WEBSITE_ID=Umami网站ID
 ```
 
-两项同时留空则关闭统计。修改后重启程序（Docker 执行 `docker compose up -d`）即可；启动时注入页面并设置对应 CSP，无需重新构建前端。MiSans 通过 CDN 加载，字体文件来自小米字体服务。
+两项同时留空则关闭访问追踪。修改后重启程序（Docker 执行 `docker compose up -d`）即可；启动时注入页面并设置对应 CSP，无需重新构建前端。MiSans 通过 CDN 加载，字体文件来自小米字体服务。
+
+### 页脚访问统计
+
+在 Umami 的「网站 → 编辑 → 分享」中新建**网站分享链接**，最少只勾选「流量 → 概览」。无需勾选会话、实时、比较、行为或增长中的其他权限；当前 Umami 的汇总接口允许「概览 / 比较」任一权限，在线接口允许「概览 / 实时」任一权限，因此仅「概览」即可提供全部页脚数据。参见 [官方分享说明](https://docs.umami.is/docs/enable-share-url)、[汇总接口权限](https://github.com/umami-software/umami/blob/master/src/app/api/websites/%5BwebsiteId%5D/stats/route.ts)与[在线接口权限](https://github.com/umami-software/umami/blob/master/src/app/api/websites/%5BwebsiteId%5D/active/route.ts)。
+
+把生成的完整链接写入同一 `.env`：
+
+```env
+UMAMI_SHARE_URL=https://统计域名/share/分享码
+```
+
+重启后页脚底部显示「今日 访客 123 浏览 456 · 总计 访客 999 浏览 1234 · 当前在线 66」，末尾文字按钮可手动刷新。支持带部署子路径及站点域名后缀的分享地址。此配置独立于上述追踪脚本：留空则完全隐藏该行且不请求统计；只配置分享链接也能展示 Umami 已有的数据。
+
+- **今日**：北京时间（UTC+8）零点至查询时刻的访客与页面浏览数。
+- **总计**：Umami 可查询的全部历史汇总，不是逐日访客数相加；清空数据、套餐保留期限等会影响总计。
+- **当前在线**：Umami 最近五分钟内的活跃访客数，不是实时连接数。
+- **刷新与故障**：后端统一缓存 15 秒、合并并发请求，失败退避 5 秒；短时间刷新可能仍显示缓存数字，不自动轮询。首次失败保留占位数字和刷新入口；手动刷新失败显示 Toast 并保留已有数字。
+
+浏览器只向本站 GET `/api/traffic` 请求五个汇总数字及获取时间；后端换取分享 token 并查询 Umami，分享 URL、token 和原始统计响应不会注入页面。API 返回 `Cache-Control: no-store`，CDN 请绕过此接口，由程序管理缓存。原有访问追踪脚本仍按 `UMAMI_SCRIPT_URL` 配置向 Umami 上报访问，和汇总查询相互独立。
+
+分享链接本身是 Umami 的公开只读入口，持有链接的人也能查看所勾选的概览；不需要提供管理员密码或 API key。部署环境须允许后端访问 Umami，建议使用 HTTPS。日志记录获取失败、HTTP 状态与缓存信息，不记录分享码、token 或上游响应正文。
 
 ## Docker 部署
 
