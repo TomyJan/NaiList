@@ -46,8 +46,17 @@ test("复制提示可堆叠、居中、关闭，适配手机和系统主题", as
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  for (let i = 0; i < 3; i++)
+  for (let i = 0; i < 3; i++) {
     await page.getByRole("button", { name: "复制群号 123456789" }).click();
+    // Freeze only countdowns: slow CI screenshots must not race manual close
+    // or theme assertions. The auto-dismiss test below covers real expiration.
+    await page
+      .locator(".Toastify__progress-bar--animated")
+      .nth(i)
+      .evaluate((node) => {
+        for (const animation of node.getAnimations()) animation.pause();
+      });
+  }
   const toasts = page.locator(".app-toast");
   await expect(toasts).toHaveCount(3);
   await expect(
