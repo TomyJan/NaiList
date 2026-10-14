@@ -30,47 +30,50 @@ func (s *Server) cookie(w http.ResponseWriter, name, value string, maxAge int) {
 }
 func (s *Server) session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		started := time.Now()
-		ctx := logging.WithOperation(r.Context(), "session.lookup")
-		logger := requestLogger(r).With("component", "auth", "event", "auth.session.lookup", "stage", "session_lookup")
-		c, cookieErr := r.Cookie("nailist_session")
-		switch {
-		case cookieErr != nil:
-			logger.DebugContext(ctx, "请求未携带登录会话", "outcome", "anonymous", "reason", "cookie_missing")
-		case s.db == nil:
-			logger.DebugContext(ctx, "数据库未配置，无法读取登录会话", "outcome", "anonymous", "reason", "database_unavailable")
-		default:
-			var u User
-			var valid bool
-			err := s.db.QueryRow(ctx, `SELECT u.id,u.nickname,u.avatar_url,s.csrf_token,s.expires_at>now() FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1`, hashToken(c.Value)).Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.CSRF, &valid)
-			switch {
-			case err == nil && valid:
-				r = r.WithContext(context.WithValue(r.Context(), userKey, u))
-				r = requestUser(r, u.ID)
-				logger.DebugContext(ctx, "登录会话有效，已关联当前账号", "outcome", "authenticated", "reason", "session_valid", "user_id", u.ID, "duration_ms", logging.DurationMS(started))
-			case errors.Is(err, pgx.ErrNoRows):
-				logger.DebugContext(ctx, "登录会话不存在", "outcome", "anonymous", "reason", "session_unknown", "duration_ms", logging.DurationMS(started))
-			case err == nil:
-				logger.DebugContext(ctx, "登录会话已过期", "outcome", "anonymous", "reason", "session_expired", "duration_ms", logging.DurationMS(started))
-			default:
-				level, outcome, reason := slog.LevelError, "failed", "database_read_failed"
-				message := "读取登录会话失败，当前请求按匿名处理"
-				switch logging.ErrorKind(err) {
-				case "canceled":
-					level, outcome, reason = slog.LevelInfo, "canceled", "client_canceled"
-					message = "请求已取消，停止读取登录会话"
-				case "timeout":
-					level, outcome, reason = slog.LevelWarn, "timeout", "deadline_exceeded"
-					message = "读取登录会话超时，当前请求按匿名处理"
-				default:
-					requestErrorLogged(r)
-				}
-				args := append([]any{"outcome", outcome, "reason", reason, "duration_ms", logging.DurationMS(started)}, logging.ErrorAttrs(err)...)
-				logger.Log(ctx, level, message, args...)
-			}
-		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, s.loadSession(r))
 	})
+}
+func (s *Server) loadSession(r *http.Request) *http.Request {
+	started := time.Now()
+	ctx := logging.WithOperation(r.Context(), "session.lookup")
+	logger := requestLogger(r).With("component", "auth", "event", "auth.session.lookup", "stage", "session_lookup")
+	c, cookieErr := r.Cookie("nailist_session")
+	switch {
+	case cookieErr != nil:
+		logger.DebugContext(ctx, "请求未携带登录会话", "outcome", "anonymous", "reason", "cookie_missing")
+	case s.db == nil:
+		logger.DebugContext(ctx, "数据库未配置，无法读取登录会话", "outcome", "anonymous", "reason", "database_unavailable")
+	default:
+		var u User
+		var valid bool
+		err := s.db.QueryRow(ctx, `SELECT u.id,u.nickname,u.avatar_url,s.csrf_token,s.expires_at>now() FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1`, hashToken(c.Value)).Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.CSRF, &valid)
+		switch {
+		case err == nil && valid:
+			r = r.WithContext(context.WithValue(r.Context(), userKey, u))
+			r = requestUser(r, u.ID)
+			logger.DebugContext(ctx, "登录会话有效，已关联当前账号", "outcome", "authenticated", "reason", "session_valid", "user_id", u.ID, "duration_ms", logging.DurationMS(started))
+		case errors.Is(err, pgx.ErrNoRows):
+			logger.DebugContext(ctx, "登录会话不存在", "outcome", "anonymous", "reason", "session_unknown", "duration_ms", logging.DurationMS(started))
+		case err == nil:
+			logger.DebugContext(ctx, "登录会话已过期", "outcome", "anonymous", "reason", "session_expired", "duration_ms", logging.DurationMS(started))
+		default:
+			level, outcome, reason := slog.LevelError, "failed", "database_read_failed"
+			message := "读取登录会话失败，当前请求按匿名处理"
+			switch logging.ErrorKind(err) {
+			case "canceled":
+				level, outcome, reason = slog.LevelInfo, "canceled", "client_canceled"
+				message = "请求已取消，停止读取登录会话"
+			case "timeout":
+				level, outcome, reason = slog.LevelWarn, "timeout", "deadline_exceeded"
+				message = "读取登录会话超时，当前请求按匿名处理"
+			default:
+				requestErrorLogged(r)
+			}
+			args := append([]any{"outcome", outcome, "reason", reason, "duration_ms", logging.DurationMS(started)}, logging.ErrorAttrs(err)...)
+			logger.Log(ctx, level, message, args...)
+		}
+	}
+	return r
 }
 func (s *Server) qqGet(ctx context.Context, address string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", address, nil)

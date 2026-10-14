@@ -119,13 +119,11 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 	r.Group(func(r chi.Router) {
-		r.Use(s.session)
 		r.Use(middleware.Throttle(8))
 		r.Get("/auth/qq", s.login)
 		r.Get("/auth/{provider}", s.providerLogin)
 	})
 	r.Group(func(r chi.Router) {
-		r.Use(s.session)
 		r.Use(middleware.Throttle(16))
 		r.Get("/auth/qq/callback", s.callback)
 		r.Get("/auth/{provider}/callback", s.providerCallback)

@@ -178,6 +178,8 @@ func (s *Server) completeAuth(w http.ResponseWriter, r *http.Request, provider s
 	done("success", "flow_consumed", "intent", intent, "nonce_present", nonce != "", "verifier_present", verifier != "")
 	if bindUserID != 0 {
 		target = "/manage"
+		// Only binding requires the existing account's session; ordinary login does not.
+		r = s.loadSession(r)
 		done = authFlowStage(r, provider, intent, "binding_session")
 		user, ok := r.Context().Value(userKey).(User)
 		session, err := r.Cookie("nailist_session")
