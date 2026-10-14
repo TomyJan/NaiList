@@ -75,13 +75,13 @@ func (s *Server) Routes() http.Handler {
 	r.Use(requestTimeout(20 * time.Second))
 	r.Use(s.headers)
 	r.Use(s.authRateLimit)
-	r.Use(s.session)
 	r.Get("/api/groups", s.list)
 	r.Get("/api/sites", s.listSites)
 	r.Get("/api/traffic", s.trafficStats)
-	r.Get("/api/me", s.me)
+	r.With(s.session).Get("/api/me", s.me)
 	r.Get("/api/auth/providers", s.authProviders)
 	r.Route("/api/admin", func(r chi.Router) {
+		r.Use(s.session)
 		r.Use(s.requireUser)
 		r.Use(s.requireAdmin)
 		r.Get("/stats", s.adminStats)
@@ -99,6 +99,7 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 	r.Group(func(r chi.Router) {
+		r.Use(s.session)
 		r.Use(s.requireUser)
 		r.Get("/api/my/groups", s.mine)
 		r.Get("/api/my/sites", s.mySites)
@@ -118,11 +119,13 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 	r.Group(func(r chi.Router) {
+		r.Use(s.session)
 		r.Use(middleware.Throttle(8))
 		r.Get("/auth/qq", s.login)
 		r.Get("/auth/{provider}", s.providerLogin)
 	})
 	r.Group(func(r chi.Router) {
+		r.Use(s.session)
 		r.Use(middleware.Throttle(16))
 		r.Get("/auth/qq/callback", s.callback)
 		r.Get("/auth/{provider}/callback", s.providerCallback)
