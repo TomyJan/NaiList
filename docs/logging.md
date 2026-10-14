@@ -52,6 +52,7 @@
 | `http.request.started` / `http.request.completed` | 请求上下文、实际状态/字节数、结果/原因、耗时、业务计数 |
 | `http.request.panic` / `http.response.write_failed` | 异常堆栈、响应写入/刷新中断；已开始响应时不追加错误 JSON |
 | `groups.list.*` / `groups.save.*` / `groups.delete.*` | 查询范围/数量、校验拒绝、群 ID/学校/群号、保存或软删除结果；链接只记格式 |
+| `lists.cache.hit` / `lists.cache.load` / `lists.cache.invalidated` | DEBUG：公开 groups / sites 快照命中、数据库重建和成功写入后的失效，记录列表类型、条数或版本；查询期间失效的旧结果不会写回缓存 |
 | `auth.session.lookup` / `auth.write.*` / `auth.access.rejected` | 会话缺失/命中/未知/过期/读取失败、来源与 CSRF 校验结果 |
 | `auth.flow.*` / `auth.provider.*` / `auth.failed` | 授权流程创建与消费、QQ token/身份/资料、OIDC discovery/token/签名/nonce/userinfo/claims、明确失败阶段 |
 | `auth.profile.unavailable` | WARN：OIDC UserInfo 补充资料失败，记录固定原因和错误类别，继续使用已验证的 ID Token 登录 |

@@ -17,7 +17,20 @@ type SiteStore interface {
 	Delete(context.Context, int64, int64) error
 }
 
-func (s *Server) listSites(w http.ResponseWriter, r *http.Request) { s.readSites(w, r, 0) }
+func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	requestLogger(r).DebugContext(r.Context(), "开始读取公开有效站点列表", "component", "sites", "event", "sites.list.started", "scope", "public")
+	snapshot, err := s.sitesCache.get(r.Context(), "sites", func(ctx context.Context) (listSnapshot, error) {
+		return encodeList(s.siteStore.List(ctx, 0))
+	})
+	if err != nil {
+		failure(w, r, err)
+		return
+	}
+	requestDetails(r, "count", snapshot.count, "scope", "public")
+	requestLogger(r).DebugContext(r.Context(), "公开有效站点列表读取完成", "component", "sites", "event", "sites.list.completed", "scope", "public", "count", snapshot.count, "duration_ms", logging.DurationMS(started))
+	respondList(w, r, snapshot)
+}
 func (s *Server) mySites(w http.ResponseWriter, r *http.Request) {
 	s.readSites(w, r, r.Context().Value(userKey).(User).ID)
 }
@@ -85,6 +98,7 @@ func (s *Server) saveSite(w http.ResponseWriter, r *http.Request) {
 		failOperation(w, r, err, "sites.save.failed", "store_failed", "site_id", id, "domain", site.Domain)
 		return
 	}
+	s.sitesCache.invalidate(r.Context(), "sites")
 	status := 200
 	if id == 0 {
 		status = 201
@@ -105,6 +119,7 @@ func (s *Server) removeSite(w http.ResponseWriter, r *http.Request) {
 		failOperation(w, r, err, "sites.delete.failed", "store_failed", "site_id", id)
 		return
 	}
+	s.sitesCache.invalidate(r.Context(), "sites")
 	requestDetails(r, "site_id", id)
 	requestLogger(r).InfoContext(r.Context(), "站点已软删除", "component", "sites", "event", "sites.delete.completed", "outcome", "success", "site_id", id, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
@@ -149,6 +164,7 @@ func (s *Server) adminSaveSite(w http.ResponseWriter, r *http.Request) {
 		adminError(w, r, err)
 		return
 	}
+	s.sitesCache.invalidate(r.Context(), "sites")
 	requestLogger(r).InfoContext(r.Context(), "管理员已保存站点信息及归属", "component", "admin", "event", "admin.site.saved", "outcome", "success", "admin_id", r.Context().Value(userKey).(User).ID, "site_id", id, "old_owner_id", old, "new_owner_id", in.OwnerID, "domain", saved.Domain, "name", saved.Name, "organization", saved.Organization, "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, saved)
 }

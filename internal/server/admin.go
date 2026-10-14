@@ -97,6 +97,8 @@ func (s *Server) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		adminError(w, r, err)
 		return
 	}
+	s.groupsCache.invalidate(r.Context(), "groups")
+	s.sitesCache.invalidate(r.Context(), "sites")
 	requestLogger(r).InfoContext(r.Context(), "管理员已删除账号及历史资源", "component", "admin", "event", "admin.user.deleted", "outcome", "success", "admin_id", actor, "account_id", id, "revoked_sessions", revoked.RevokedSessions, "deleted_flows", revoked.DeletedFlows, "deleted_identities", revoked.DeletedIdentities, "deleted_groups", revoked.DeletedGroups, "deleted_sites", revoked.DeletedSites, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
 }
@@ -137,6 +139,7 @@ func (s *Server) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
 		adminError(w, r, err)
 		return
 	}
+	s.groupsCache.invalidate(r.Context(), "groups")
 	requestLogger(r).InfoContext(r.Context(), "管理员已保存奶群信息及归属", "component", "admin", "event", "admin.group.saved", "outcome", "success", "admin_id", r.Context().Value(userKey).(User).ID, "group_id", id, "old_owner_id", old, "new_owner_id", in.OwnerID, "organization", saved.Organization, "qq_number", saved.QQNumber, "keyword_count", len(saved.Keywords), "link_format", joinLinkFormat(saved.JoinURL), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, saved)
 }

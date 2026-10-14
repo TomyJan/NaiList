@@ -47,15 +47,17 @@ type GroupStore interface {
 	Delete(context.Context, int64, int64) error
 }
 type Server struct {
-	cfg       Config
-	db        *pgxpool.Pool
-	store     GroupStore
-	siteStore SiteStore
-	client    *http.Client
-	web       http.Handler
-	csp       string
-	traffic   *traffic.Client
-	limiter   *requestLimiter
+	cfg         Config
+	db          *pgxpool.Pool
+	store       GroupStore
+	siteStore   SiteStore
+	client      *http.Client
+	web         http.Handler
+	csp         string
+	traffic     *traffic.Client
+	limiter     *requestLimiter
+	groupsCache listCache
+	sitesCache  listCache
 }
 
 func New(cfg Config, db *pgxpool.Pool, store GroupStore) *Server {
@@ -228,14 +230,16 @@ func failOperation(w http.ResponseWriter, r *http.Request, err error, event, rea
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	requestLogger(r).DebugContext(r.Context(), "查询所有用户上传的有效奶群，不分页", "component", "groups", "event", "groups.list.started", "scope", "public")
-	g, err := s.store.List(r.Context(), 0)
+	snapshot, err := s.groupsCache.get(r.Context(), "groups", func(ctx context.Context) (listSnapshot, error) {
+		return encodeList(s.store.List(ctx, 0))
+	})
 	if err != nil {
 		failure(w, r, err)
 		return
 	}
-	requestDetails(r, "count", len(g), "scope", "public")
-	requestLogger(r).DebugContext(r.Context(), "已读取公开奶群列表", "component", "groups", "event", "groups.list.completed", "scope", "public", "count", len(g), "duration_ms", logging.DurationMS(started))
-	respond(w, r, 200, g)
+	requestDetails(r, "count", snapshot.count, "scope", "public")
+	requestLogger(r).DebugContext(r.Context(), "已读取公开奶群列表", "component", "groups", "event", "groups.list.completed", "scope", "public", "count", snapshot.count, "duration_ms", logging.DurationMS(started))
+	respondList(w, r, snapshot)
 }
 func (s *Server) mine(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value(userKey).(User)
@@ -286,6 +290,7 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 		failOperation(w, r, err, "groups.save.failed", "store_failed", "group_id", id, "qq_number", in.QQNumber)
 		return
 	}
+	s.groupsCache.invalidate(r.Context(), "groups")
 	status := 200
 	if id == 0 {
 		status = 201
@@ -311,6 +316,7 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 		failOperation(w, r, err, "groups.delete.failed", "store_failed", "group_id", id)
 		return
 	}
+	s.groupsCache.invalidate(r.Context(), "groups")
 	requestDetails(r, "group_id", id)
 	requestLogger(r).InfoContext(r.Context(), "奶群已软删除，将不再出现在公开列表", "component", "groups", "event", "groups.delete.completed", "outcome", "success", "group_id", id, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
