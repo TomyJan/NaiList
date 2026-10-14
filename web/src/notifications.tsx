@@ -8,6 +8,7 @@ import {
   type Id,
 } from "react-toastify/unstyled";
 import "react-toastify/dist/ReactToastify.css";
+import { placeNotificationHost } from "./notificationHost";
 
 const recent: Id[] = [];
 function keepRecent(id: Id) {
@@ -35,14 +36,7 @@ export function Notifications() {
   useLayoutEffect(() => {
     host.className = "toast-host";
     // Native dialogs live above z-index layers and make outside controls inert.
-    // Move the same portal host so notifications remain visible and dismissible
-    // without remounting the container or losing its queue.
-    const place = () => {
-      const dialogs =
-        document.querySelectorAll<HTMLDialogElement>("dialog[open]");
-      const target = dialogs.item(dialogs.length - 1) ?? document.body;
-      if (host.parentElement !== target) target.appendChild(host);
-    };
+    const place = () => placeNotificationHost(host);
     place();
     const observer = new MutationObserver(place);
     observer.observe(document.body, {

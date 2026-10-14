@@ -173,3 +173,51 @@ test("减少动态效果时仍自动消失，连续报错优先显示最新提�
   await expect(page.getByRole("alert").last()).toContainText("5～11 位数字");
   await expect(toasts).toHaveCount(3);
 });
+
+for (const legacyMoves of [false, true]) {
+  test(`开关弹窗不重播已有 Toast 动画或重置剩余时间${legacyMoves ? "（兼容模式）" : ""}`, async ({
+    page,
+  }) => {
+    if (legacyMoves) {
+      await page.addInitScript(() => {
+        Object.defineProperty(Element.prototype, "moveBefore", {
+          value: undefined,
+          configurable: true,
+        });
+      });
+    }
+    await page.goto("/manage");
+    await page.getByRole("button", { name: "添加奶群" }).click();
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    const toast = page.locator(".app-toast");
+    const progress = toast.locator(".Toastify__progress-bar--animated");
+    await expect(toast).toHaveCSS("opacity", "1");
+    await expect
+      .poll(() =>
+        progress.evaluate((node) => node.getAnimations()[0]?.playState),
+      )
+      .toBe("running");
+    // Advance the real CSS countdown so a restart is observable without a long wait.
+    await progress.evaluate((node) => {
+      node.getAnimations()[0].currentTime = 3500;
+    });
+    const initialToast = await toast.elementHandle();
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(
+      await progress.evaluate((node) =>
+        Number(node.getAnimations()[0]?.currentTime),
+      ),
+    ).toBeGreaterThanOrEqual(3500);
+    await page.getByRole("button", { name: "添加奶群" }).click();
+    expect(
+      await progress.evaluate((node) =>
+        Number(node.getAnimations()[0]?.currentTime),
+      ),
+    ).toBeGreaterThanOrEqual(3500);
+    expect(
+      await toast.evaluate((node, initial) => node === initial, initialToast),
+    ).toBe(true);
+    await expect(toast).toHaveCount(0, { timeout: 4000 });
+  });
+}

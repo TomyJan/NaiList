@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { RefreshCw } from "lucide-react";
+import { releaseNotificationHost } from "./notificationHost";
 
 const Exiting = createContext(false);
 const reducedMotion = () =>
@@ -62,7 +63,10 @@ export function MotionDialog({
   useLayoutEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      releaseNotificationHost(dialog);
+      dialog.close();
+    };
   }, [ref]);
   return (
     <dialog
