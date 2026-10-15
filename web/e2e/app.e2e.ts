@@ -188,7 +188,11 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
     "href",
     "https://vov.moe",
   );
-  await expect(footer.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+  await expect(
+    footer.getByRole("link", { name: "GitHub", exact: true }),
+  ).toHaveCount(0);
+  const versionLink = footer.locator(".footer-version").getByRole("link");
+  await expect(versionLink).toHaveAttribute(
     "href",
     "https://github.com/TomyJan/NaiList",
   );
@@ -203,9 +207,7 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
     .locator('meta[name="nailist-version"]')
     .getAttribute("content");
   expect(compiledVersion).toMatch(/^\d+\.\d+\.\d+(?:-[a-f0-9]{7,})?$/);
-  await expect(footer.locator(".footer-version")).toHaveText(
-    `V${compiledVersion}`,
-  );
+  await expect(versionLink).toHaveText(`V${compiledVersion}`);
   expect(
     await page.evaluate(() => getComputedStyle(document.body).fontFamily),
   ).toContain("MiSans");
