@@ -119,6 +119,7 @@ export function TabIndicator({
   scope?: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const positioned = useRef(false);
   useLayoutEffect(() => {
     const line = ref.current!;
     const track = line.parentElement!;
@@ -134,8 +135,15 @@ export function TabIndicator({
         width: `${active.offsetWidth}px`,
         transform: `translate(${active.offsetLeft}px, ${active.offsetTop + active.offsetHeight - 3}px)`,
       };
+      if (!positioned.current) line.style.transition = "none";
       line.style.width = position.width;
       line.style.transform = position.transform;
+      if (!positioned.current) {
+        // 首次定位在绘制前完成，后续 Tab 切换才启用过渡。
+        void line.offsetWidth;
+        line.style.transition = "";
+        positioned.current = true;
+      }
       const previous = scope ? tabPositions.get(scope) : undefined;
       if (first && previous && !reducedMotion()) {
         animation = line.animate([previous, position], {

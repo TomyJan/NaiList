@@ -33,6 +33,41 @@ async function setup(page: Page) {
 
 test.beforeEach(async ({ page }) => setup(page));
 
+test("首次加载时 Tab 色条直接定位到底部，不从上方滑入", async ({ page }) => {
+  await page.addInitScript(() => {
+    const samples: number[] = [];
+    Object.assign(window, { tabEntrySamples: samples });
+    const sample = () => {
+      const line = document.querySelector(".tab-indicator");
+      const active = line?.closest(".list-tabs")?.querySelector(".active");
+      if (line && active) {
+        samples.push(
+          Math.abs(
+            line.getBoundingClientRect().bottom -
+              active.getBoundingClientRect().bottom,
+          ),
+        );
+      }
+      if (samples.length < 20) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.goto("/");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { tabEntrySamples: number[] }).tabEntrySamples
+            .length,
+      ),
+    )
+    .toBe(20);
+  const offsets = await page.evaluate(
+    () => (window as unknown as { tabEntrySamples: number[] }).tabEntrySamples,
+  );
+  expect(Math.max(...offsets)).toBeLessThan(1);
+});
+
 test("弹窗退出保留遮罩、禁止交互，重开保留草稿与焦点", async ({ page }) => {
   await page.goto("/manage");
   const add = page.getByRole("button", { name: "添加奶群", exact: true });
