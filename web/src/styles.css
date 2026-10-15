@@ -35,7 +35,19 @@ body {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 4px 9px;
+  gap: 4px 20px;
+}
+.footer-meta > span {
+  position: relative;
+  max-width: 100%;
+}
+.footer-meta > span[data-separator="true"]::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  top: 0.4em;
+  height: 1em;
+  border-right: 1px solid currentColor;
 }
 .footer-version {
   overflow-wrap: anywhere;
@@ -48,12 +60,6 @@ body {
 }
 .footer p {
   margin-top: 4px;
-}
-.footer-policies {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 6px;
 }
 .traffic-stats,
 .traffic-group,

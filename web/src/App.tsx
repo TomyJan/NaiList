@@ -7,7 +7,8 @@ import type { ListKind } from "./ListTabs";
 import { AccountBindings, LoginDialog } from "./Account";
 import { Admin } from "./Admin";
 import { Notifications, notify } from "./notifications";
-import { SITE_VERSION, TRAFFIC_ENABLED } from "./runtime";
+import { TRAFFIC_ENABLED } from "./runtime";
+import { FooterMeta } from "./FooterMeta";
 import { TrafficStats } from "./TrafficStats";
 import { PageTransition, Presence } from "./motion";
 import { AudioButton } from "./AudioButton";
@@ -320,29 +321,8 @@ export default function App() {
         )}
       </PageTransition>
       <footer className="footer">
-        <div className="footer-meta">
-          <span>
-            Powered by{" "}
-            <a href="https://vov.moe" target="_blank" rel="noopener noreferrer">
-              TomyJan
-            </a>
-          </span>
-          <span aria-hidden="true">|</span>
-          <span className="footer-version">V{SITE_VERSION}</span>
-          <a
-            href="https://github.com/TomyJan/NaiList"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            GitHub
-          </a>
-        </div>
+        <FooterMeta />
         <p>反馈支持请搜索加入 兰理工 群</p>
-        <nav className="footer-policies" aria-label="政策与协议">
-          <a href="/terms">用户协议</a>
-          <span aria-hidden="true">·</span>
-          <a href="/privacy">隐私政策</a>
-        </nav>
         {TRAFFIC_ENABLED && <TrafficStats />}
       </footer>
       <Presence visible={loginDialog}>
