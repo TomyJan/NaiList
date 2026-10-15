@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshIcon } from "./motion";
 import { api } from "./api";
 import { notify } from "./notifications";
+import { useWrappingSeparators } from "./useWrappingSeparators";
 
 type Counts = { visitors: number; pageviews: number };
 type Stats = {
@@ -12,6 +13,7 @@ type Stats = {
 };
 
 export function TrafficStats() {
+  const ref = useWrappingSeparators();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
@@ -50,6 +52,7 @@ export function TrafficStats() {
   return (
     <div
       className="traffic-stats"
+      ref={ref}
       aria-label="访问统计"
       aria-live="polite"
       aria-busy={loading}
@@ -58,15 +61,9 @@ export function TrafficStats() {
         <span>今日</span> <span>访客 {number(stats?.today.visitors)}</span>{" "}
         <span>浏览 {number(stats?.today.pageviews)}</span>
       </span>
-      <span className="traffic-divider" aria-hidden="true">
-        ·
-      </span>
       <span className="traffic-group">
         <span>总计</span> <span>访客 {number(stats?.total.visitors)}</span>{" "}
         <span>浏览 {number(stats?.total.pageviews)}</span>
-      </span>
-      <span className="traffic-divider" aria-hidden="true">
-        ·
       </span>
       <span className="traffic-group">
         <span title="最近五分钟内的活跃访客">

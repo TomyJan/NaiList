@@ -1,27 +1,8 @@
-import { useLayoutEffect, useRef } from "react";
 import { SITE_VERSION } from "./runtime";
+import { useWrappingSeparators } from "./useWrappingSeparators";
 
 export function FooterMeta() {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const container = ref.current;
-    if (!container) return;
-    const items = Array.from(container.children) as HTMLElement[];
-    const updateSeparators = () => {
-      for (const [index, item] of items.entries()) {
-        const next = items[index + 1];
-        item.dataset.separator = String(
-          !!next && item.offsetTop === next.offsetTop,
-        );
-      }
-    };
-    const observer = new ResizeObserver(updateSeparators);
-    observer.observe(container);
-    items.forEach((item) => observer.observe(item));
-    updateSeparators();
-    return () => observer.disconnect();
-  }, []);
+  const ref = useWrappingSeparators();
 
   return (
     <div className="footer-meta" ref={ref}>

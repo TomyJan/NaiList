@@ -71,11 +71,24 @@ body {
 }
 .traffic-stats {
   margin-top: 8px;
-  gap: 4px 10px;
+  gap: 4px 20px;
   font-variant-numeric: tabular-nums;
 }
 .traffic-group {
+  position: relative;
+  max-width: 100%;
   gap: 4px 6px;
+}
+.traffic-group[data-separator="true"]::after {
+  content: "";
+  position: absolute;
+  right: -11px;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
 }
 .traffic-group > span {
   white-space: nowrap;
@@ -105,9 +118,6 @@ body {
 @media (max-width: 600px) {
   .traffic-stats {
     flex-direction: column;
-  }
-  .traffic-divider {
-    display: none;
   }
 }
 @media (prefers-color-scheme: dark) {
