@@ -64,6 +64,50 @@ const seed: Group[] = [
   },
 ];
 
+test("推荐搜索填入奶群搜索框并本地筛选，奶站搜索独立", async ({ page }) => {
+  let fetches = 0;
+  await page.route("**/api/me", (route) => route.fulfill({ json: null }));
+  await page.route("**/api/auth/providers", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/sites", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/groups", (route) => {
+    fetches++;
+    return route.fulfill({
+      json: [{ ...seed[0], organization: "世界奶蛙组织" }, seed[1]],
+    });
+  });
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/");
+  await expect(page.locator("article")).toHaveCount(2);
+  await expect(page.locator(".heading-intro")).toContainText(
+    "登录后可上传与管理奶群与奶站",
+  );
+  await page.getByRole("textbox", { name: "搜索奶群" }).fill("华工");
+  const recommendation = page.getByRole("button", { name: "世界奶蛙组织" });
+  await recommendation.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "搜索奶群" })).toHaveValue(
+    "世界奶蛙组织",
+  );
+  await expect(page.locator("article")).toHaveCount(1);
+  await expect(page.locator("article")).toContainText("世界奶蛙组织");
+  expect(fetches).toBe(1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("tab", { name: "奶站列表" }).click();
+  await expect(recommendation).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "搜索奶站" })).toHaveValue("");
+  await page.getByRole("tab", { name: "奶群列表" }).click();
+  await expect(page.getByRole("textbox", { name: "搜索奶群" })).toHaveValue(
+    "世界奶蛙组织",
+  );
+  expect(fetches).toBe(1);
+});
+
 test("首页每次加载随机排序，搜索和复制保持顺序，管理列表保持接口顺序", async ({
   page,
   context,
@@ -196,7 +240,7 @@ test("单列、隐藏关键词搜索、移动端和复制", async ({ page, conte
     "href",
     "https://github.com/TomyJan/NaiList",
   );
-  await expect(footer).toContainText("反馈支持请搜索加入 兰理工 群");
+  await expect(footer).toContainText("反馈支持联系 请搜索加入 兰理工 群");
   await expect(page.locator(".page-heading")).toContainText(
     "帮助支持信息请查看页脚",
   );

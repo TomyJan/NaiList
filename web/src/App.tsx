@@ -322,7 +322,7 @@ export default function App() {
       </PageTransition>
       <footer className="footer">
         <FooterMeta />
-        <p>反馈支持请搜索加入 兰理工 群</p>
+        <p>反馈支持联系 请搜索加入 兰理工 群</p>
         {TRAFFIC_ENABLED && <TrafficStats />}
       </footer>
       <Presence visible={loginDialog}>

@@ -489,6 +489,19 @@ h1 {
   flex: 1;
   min-width: 0;
 }
+.recommended-searches {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 2px 0;
+  font-size: 12px;
+}
+.recommended-searches button {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: inherit;
+}
 .refresh-button {
   flex: 0 0 54px;
   padding: 0;

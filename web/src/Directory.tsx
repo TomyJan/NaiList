@@ -204,7 +204,7 @@ export function Directory({
           </h1>
           {!manage && (
             <div className="heading-intro">
-              <p>发现奶群与奶站; 登录后可上传与管理自己的奶表</p>
+              <p>发现奶群与奶站; 登录后可上传与管理奶群与奶站</p>
               <ul className="heading-notes">
                 <li className="shuffle-note">
                   <Shuffle size={14} aria-hidden="true" />
@@ -292,6 +292,18 @@ export function Directory({
                 />
               </button>
             </div>
+            {!manage && kind === "groups" && (
+              <div className="recommended-searches" aria-label="推荐搜索">
+                <span>推荐搜索</span>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setQuery("世界奶蛙组织")}
+                >
+                  世界奶蛙组织
+                </button>
+              </div>
+            )}
             <div className="list-caption">
               {loading ? "加载中" : `${count} 个${noun}`}
             </div>
