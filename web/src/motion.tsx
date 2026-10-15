@@ -133,9 +133,10 @@ export function TabIndicator({
       if (!active) return;
       const position = {
         width: `${active.offsetWidth}px`,
-        transform: `translate(${active.offsetLeft}px, ${active.offsetTop + active.offsetHeight - 3}px)`,
+        transform: `translateX(${active.offsetLeft}px)`,
       };
       if (!positioned.current) line.style.transition = "none";
+      line.style.top = `${active.offsetTop + active.offsetHeight - 3}px`;
       line.style.width = position.width;
       line.style.transform = position.transform;
       if (!positioned.current) {

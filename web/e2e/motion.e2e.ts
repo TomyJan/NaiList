@@ -66,6 +66,48 @@ test("首次加载时 Tab 色条直接定位到底部，不从上方滑入", asy
     () => (window as unknown as { tabEntrySamples: number[] }).tabEntrySamples,
   );
   expect(Math.max(...offsets)).toBeLessThan(1);
+
+  // 模拟字体切换带来的高度变化，确保只允许横向滑动。
+  const verticalTravel = await page.locator(".list-tabs").evaluate((tabs) => {
+    const active = tabs.querySelector<HTMLElement>(".active")!;
+    const line = tabs.querySelector<HTMLElement>(".tab-indicator")!;
+    active.style.lineHeight = "24px";
+    return new Promise<number>((resolve) => {
+      let frames = 0;
+      let maximum = 0;
+      const sample = () => {
+        for (const animation of line.getAnimations()) {
+          const positions = (animation.effect as KeyframeEffect)
+            .getKeyframes()
+            .filter((frame) => typeof frame.transform === "string")
+            .map(
+              (frame) => new DOMMatrixReadOnly(frame.transform as string).m42,
+            );
+          if (positions.length > 1)
+            maximum = Math.max(
+              maximum,
+              Math.max(...positions) - Math.min(...positions),
+            );
+        }
+        if (++frames < 20) requestAnimationFrame(sample);
+        else resolve(maximum);
+      };
+      requestAnimationFrame(sample);
+    });
+  });
+  expect(verticalTravel).toBe(0);
+  await expect
+    .poll(() =>
+      page.locator(".list-tabs").evaluate((tabs) => {
+        const line = tabs.querySelector(".tab-indicator")!;
+        const active = tabs.querySelector(".active")!;
+        return Math.abs(
+          line.getBoundingClientRect().bottom -
+            active.getBoundingClientRect().bottom,
+        );
+      }),
+    )
+    .toBeLessThan(1);
 });
 
 test("弹窗退出保留遮罩、禁止交互，重开保留草稿与焦点", async ({ page }) => {

@@ -361,6 +361,7 @@ html[data-page="home"] body::before {
   padding: 13px 17px 15px;
   margin-bottom: -1px;
   min-height: 48px;
+  line-height: 20px;
   border-bottom: 3px solid transparent;
   background: transparent;
   color: #797264;
