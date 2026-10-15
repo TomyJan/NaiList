@@ -493,14 +493,27 @@ h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin: 12px 2px 0;
-  font-size: 12px;
+  font-size: 13px;
 }
-.recommended-searches button {
-  padding: 4px 10px;
-  border-radius: 20px;
+.recommended-searches > span {
+  color: #675c48;
+  font-weight: 600;
+}
+.recommended-keyword {
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid #e5d9b8;
+  border-radius: 8px;
+  background: #faf4df;
+  color: #6d5b2b;
   font-size: inherit;
+  font-weight: 500;
+}
+.recommended-keyword:hover {
+  background: #f3e8c6;
+  border-color: #cdbb84;
 }
 .refresh-button {
   flex: 0 0 54px;
@@ -1025,6 +1038,18 @@ h1 {
   .secondary {
     background: #3b362b;
     color: #e3ddd0;
+  }
+  .recommended-searches > span {
+    color: #c3bba9;
+  }
+  .recommended-keyword {
+    background: #2d281c;
+    border-color: #53472b;
+    color: #d9cca8;
+  }
+  .recommended-keyword:hover {
+    background: #3c3420;
+    border-color: #79663a;
   }
   .danger {
     background: #a63f36;

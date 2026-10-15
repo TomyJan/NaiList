@@ -297,7 +297,7 @@ export function Directory({
                 <span>推荐搜索</span>
                 <button
                   type="button"
-                  className="secondary"
+                  className="recommended-keyword"
                   onClick={() => setQuery("世界奶蛙组织")}
                 >
                   世界奶蛙组织
