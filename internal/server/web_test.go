@@ -15,7 +15,7 @@ func TestStartupWebInjection(t *testing.T) {
 	// Runtime configuration is captured at construction, not read on each request.
 	t.Setenv("UMAMI_SCRIPT_URL", "https://changed.example.com/script.js")
 	var first string
-	for _, route := range []string{"/", "/manage", "/admin", "/admin/", "/admin/users", "/admin/groups", "/admin/sites", "/index.html"} {
+	for _, route := range []string{"/", "/terms", "/privacy", "/manage", "/admin", "/admin/", "/admin/users", "/admin/groups", "/admin/sites", "/index.html"} {
 		out := httptest.NewRecorder()
 		handler.ServeHTTP(out, httptest.NewRequest("GET", route, nil))
 		body := out.Body.String()
@@ -73,7 +73,7 @@ func TestEmbeddedWebWithoutExternalFiles(t *testing.T) {
 	t.Chdir(t.TempDir())
 	handler := New(Config{}, nil, &memoryGroups{}).Routes()
 	var index string
-	for _, route := range []string{"/", "/manage"} {
+	for _, route := range []string{"/", "/terms", "/privacy", "/manage"} {
 		out := httptest.NewRecorder()
 		handler.ServeHTTP(out, httptest.NewRequest(http.MethodGet, route, nil))
 		if out.Code != http.StatusOK || !strings.Contains(out.Body.String(), `<div id="root"></div>`) {

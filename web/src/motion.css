@@ -25,6 +25,34 @@
   transform-origin: top right;
   animation: menu-enter 180ms var(--motion-ease) both;
 }
+.cookie-notice {
+  animation: cookie-enter 220ms var(--motion-ease) both;
+}
+.motion-presence[data-exiting="true"] .cookie-notice {
+  animation: cookie-exit var(--motion-exit) ease-in both;
+}
+@keyframes cookie-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes cookie-exit {
+  to {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cookie-notice,
+  .motion-presence[data-exiting="true"] .cookie-notice {
+    animation: none;
+  }
+}
 .motion-presence[data-exiting="true"] .account-menu {
   animation: menu-exit var(--motion-exit) ease-in both;
 }

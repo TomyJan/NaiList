@@ -454,6 +454,8 @@ test("选择登录方式和无可用登录提示", async ({ page }) => {
   );
   await page.goto("/");
   await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("link", { name: "QQ 登录" })).toBeDisabled();
+  await page.getByRole("checkbox").check();
   await expect(page.getByRole("link", { name: "QQ 登录" })).toHaveAttribute(
     "href",
     "/auth/qq",

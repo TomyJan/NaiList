@@ -152,6 +152,8 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 首页页脚提供项目与反馈支持入口。奶群和奶站添加、编辑成功后提醒首页信息可能需一分钟更新。CDN 可分别缓存公开 GET `/api/groups` 和 `/api/sites`；登录、个人、管理和所有写入接口请勿缓存。
 
+页脚提供 `/terms` 用户协议和 `/privacy` 隐私政策，支持直接访问及刷新。登录弹窗必须主动勾选同意两份政策后才能跳转，默认不勾选；勾选或取消保存在 `localStorage` 的 `nailist:agreement`。底部 Cookie 告知不阻塞浏览，确认状态独立保存在 `nailist:cookie-notice`，不会自动勾选协议，也不控制 Umami 脚本加载。两个记录以 `web/src/consent.ts` 中的 `POLICY_VERSION` 为版本值；政策修改时同步更新版本，新版本需重新确认。浏览器禁用存储时仅保留本次页面状态，确认不作为服务端签署记录。政策正文位于 `web/src/legal-content.ts`，更换运营者或调整数据处理方式时应同步修改。
+
 操作结果和错误使用底部居中的 Toast，支持堆叠、自动消失、手动关闭与系统深浅色。保存成功的缓存提醒保留 8 秒；表单失败保留输入，弹窗关闭后通知继续显示。
 
 弹窗、头像菜单、页面与 Tab 使用统一轻量动效，刷新图标随请求旋转；自动遵循系统「减少动态效果」设置。关闭动画期间禁止重复交互，结束后恢复焦点，草稿与保存规则保持一致。

@@ -7,6 +7,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
+  --cookie-notice-space: 0px;
 }
 
 * {
@@ -22,7 +23,7 @@ body {
 }
 .footer {
   margin-top: auto;
-  padding: 22px 20px 26px;
+  padding: 22px 20px calc(26px + var(--cookie-notice-space));
   border-top: 1px solid #eae7e1;
   color: #807b6f;
   text-align: center;
@@ -47,6 +48,12 @@ body {
 }
 .footer p {
   margin-top: 4px;
+}
+.footer-policies {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
 }
 .traffic-stats,
 .traffic-group,
@@ -1179,6 +1186,192 @@ h1 {
 }
 .login-modal p {
   color: #868175;
+}
+.provider-login[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent;
+}
+.login-agreement {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 20px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: #6f6859;
+}
+.login-agreement input {
+  display: inline-block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 4px 0 0;
+  padding: 0;
+  accent-color: #8a6500;
+  cursor: pointer;
+}
+.login-agreement label {
+  display: inline;
+  margin: 0 4px 0 0;
+  font-size: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+.login-agreement a,
+.legal-page a,
+.cookie-notice a {
+  color: #8a6500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.login-agreement span {
+  margin: 0 4px;
+}
+.legal-page {
+  max-width: 820px;
+  margin: 0 auto 28px;
+  padding: clamp(22px, 5vw, 48px);
+  background: #fff;
+  border: 1px solid #e8e5dd;
+  border-radius: 22px;
+}
+.legal-heading {
+  padding-bottom: 26px;
+  border-bottom: 1px solid #eae7e1;
+}
+.legal-eyebrow {
+  color: #8a6500;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.legal-heading h1 {
+  margin: 12px 0 10px;
+  font-size: clamp(26px, 5vw, 34px);
+}
+.legal-heading p,
+.legal-date {
+  color: #706b5f;
+}
+.legal-heading p {
+  margin: 0 0 14px;
+  line-height: 1.8;
+}
+.legal-date {
+  font-size: 12px;
+}
+.legal-content section {
+  margin-top: 30px;
+}
+.legal-content h2 {
+  font-size: 17px;
+  line-height: 1.7;
+  margin: 0 0 12px;
+}
+.legal-content p {
+  color: #544f43;
+  line-height: 2;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+}
+.legal-related {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 22px;
+  border-top: 1px solid #eae7e1;
+  font-size: 13px;
+}
+.cookie-notice {
+  position: fixed;
+  z-index: 20;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: min(860px, calc(100vw - 32px));
+  padding: 20px 22px;
+  border: 1px solid #e7e1d4;
+  border-radius: 18px;
+  background: #fffdf7;
+  color: #3c3525;
+  box-shadow: 0 10px 40px #352c1626;
+}
+.cookie-notice > svg {
+  flex-shrink: 0;
+  color: #8a6500;
+}
+.cookie-notice > div {
+  flex: 1;
+  min-width: 0;
+}
+.cookie-notice strong {
+  font-size: 14px;
+}
+.cookie-notice p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #706b5f;
+}
+.cookie-notice button {
+  flex-shrink: 0;
+}
+body > .toast-host .app-toasts.Toastify__toast-container {
+  bottom: calc(
+    max(24px, env(safe-area-inset-bottom)) + var(--cookie-notice-space)
+  );
+}
+@media (max-width: 600px) {
+  .cookie-notice {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 12px;
+    padding: 18px;
+  }
+  .cookie-notice button {
+    grid-column: 2;
+    justify-self: end;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .legal-page {
+    background: #26231b;
+    border-color: #444035;
+  }
+  .legal-heading,
+  .legal-related {
+    border-color: #444035;
+  }
+  .legal-heading p,
+  .legal-date,
+  .cookie-notice p,
+  .login-agreement {
+    color: #b4afa4;
+  }
+  .legal-content p {
+    color: #d2cdc2;
+  }
+  .legal-eyebrow,
+  .legal-page a,
+  .cookie-notice a,
+  .cookie-notice > svg,
+  .login-agreement a {
+    color: #e8d9a0;
+  }
+  .login-agreement input {
+    accent-color: #d5b347;
+  }
+  .cookie-notice {
+    background: #2c281f;
+    color: #eee9dc;
+    border-color: #514938;
+    box-shadow: 0 10px 40px #0005;
+  }
 }
 @media (max-width: 700px) {
   .bindings {

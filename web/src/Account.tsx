@@ -4,6 +4,7 @@ import { Check, LogIn, ShieldCheck, X } from "lucide-react";
 import { api, ApiError, writeOptions } from "./api";
 import { notify } from "./notifications";
 import type { LoginProvider, User } from "./types";
+import { AGREEMENT_KEY, useAcknowledgement } from "./consent";
 
 function ProviderIcon({ provider }: { provider: LoginProvider }) {
   const icon =
@@ -35,6 +36,7 @@ export function LoginDialog({
   onRetry: () => Promise<void>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [agreed, setAgreed] = useAcknowledgement(AGREEMENT_KEY);
   return (
     <MotionDialog
       ref={ref}
@@ -65,7 +67,13 @@ export function LoginDialog({
             <a
               className="provider-login"
               key={provider.id}
-              href={provider.loginUrl}
+              href={agreed ? provider.loginUrl : undefined}
+              role="link"
+              aria-disabled={!agreed}
+              tabIndex={agreed ? 0 : -1}
+              onClick={(event) => {
+                if (!agreed) event.preventDefault();
+              }}
             >
               <ProviderIcon provider={provider} />
               <span>{provider.name} 登录</span>
@@ -73,6 +81,24 @@ export function LoginDialog({
           ))}
         </div>
       )}
+      <div className="login-agreement">
+        <input
+          id="login-agreement"
+          type="checkbox"
+          checked={agreed}
+          onChange={(event) => setAgreed(event.target.checked)}
+        />
+        <div>
+          <label htmlFor="login-agreement">我已阅读并同意</label>
+          <a href="/terms" target="_blank" rel="noopener noreferrer">
+            用户协议
+          </a>
+          <span>和</span>
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">
+            隐私政策
+          </a>
+        </div>
+      </div>
     </MotionDialog>
   );
 }

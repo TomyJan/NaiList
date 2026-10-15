@@ -12,10 +12,13 @@ import { TrafficStats } from "./TrafficStats";
 import { PageTransition, Presence } from "./motion";
 import { AudioButton } from "./AudioButton";
 import type { User, LoginProvider } from "./types";
+import { CookieNotice, LegalPage } from "./Legal";
 
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const manage = path === "/manage";
+  const legalPage =
+    path === "/terms" ? "terms" : path === "/privacy" ? "privacy" : null;
   const adminPage = [
     "/admin",
     "/admin/",
@@ -50,21 +53,25 @@ export default function App() {
     return () => window.removeEventListener("popstate", listener);
   }, []);
   useEffect(() => {
-    const title = manage
-      ? "管理奶表"
-      : adminPage
-        ? path === "/admin/users"
-          ? "用户管理"
-          : path === "/admin/groups"
-            ? "奶群管理"
-            : path === "/admin/sites"
-              ? "奶站管理"
-              : "站点概览"
-        : kind === "groups"
-          ? "奶群列表"
-          : "奶站列表";
+    const title = legalPage
+      ? legalPage === "terms"
+        ? "用户协议"
+        : "隐私政策"
+      : manage
+        ? "管理奶表"
+        : adminPage
+          ? path === "/admin/users"
+            ? "用户管理"
+            : path === "/admin/groups"
+              ? "奶群管理"
+              : path === "/admin/sites"
+                ? "奶站管理"
+                : "站点概览"
+          : kind === "groups"
+            ? "奶群列表"
+            : "奶站列表";
     document.title = `${title} - NaiList`;
-  }, [path, kind, manage, adminPage]);
+  }, [path, kind, manage, adminPage, legalPage]);
   // 供 CSS 区分页面：主页显示奶蛙背景，管理页不显示。
   useEffect(() => {
     document.documentElement.dataset.page = path === "/" ? "home" : "manage";
@@ -263,7 +270,9 @@ export default function App() {
         </div>
       </header>
       <PageTransition value={path}>
-        {adminPage ? (
+        {legalPage ? (
+          <LegalPage page={legalPage} />
+        ) : adminPage ? (
           <Admin
             key={`${path}:${user?.id ?? "guest"}`}
             page={
@@ -329,6 +338,11 @@ export default function App() {
           </a>
         </div>
         <p>反馈支持请搜索加入 兰理工 群</p>
+        <nav className="footer-policies" aria-label="政策与协议">
+          <a href="/terms">用户协议</a>
+          <span aria-hidden="true">·</span>
+          <a href="/privacy">隐私政策</a>
+        </nav>
         {TRAFFIC_ENABLED && <TrafficStats />}
       </footer>
       <Presence visible={loginDialog}>
@@ -341,6 +355,7 @@ export default function App() {
         )}
       </Presence>
       <Notifications />
+      <CookieNotice />
     </>
   );
 }
