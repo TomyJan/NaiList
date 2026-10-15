@@ -18,6 +18,8 @@ export function useAcknowledgement(key: string) {
       if (event.key === key || event.key === null) setAccepted(read());
     };
     window.addEventListener("storage", sync);
+    // 补齐首次读取与监听建立之间发生的跨标签页更新。
+    setAccepted(read());
     return () => window.removeEventListener("storage", sync);
   }, [key]);
   const update = (value: boolean) => {

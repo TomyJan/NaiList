@@ -144,11 +144,34 @@ test("旧版确认失效，新版本需重新勾选和确认", async ({ page }) 
   await expect(page.getByRole("link", { name: "QQ 登录" })).toBeDisabled();
 });
 
+test("确认状态在渲染与订阅之间变化时仍同步到登录弹窗", async ({ page }) => {
+  await page.addInitScript(
+    ({ key, version }) => {
+      const subscribe = window.addEventListener.bind(window);
+      window.addEventListener = (type, listener, options) => {
+        // 模拟其他标签页在首次读取后、监听建立前更新存储。
+        if (
+          type === "storage" &&
+          document.querySelector('input[type="checkbox"]')
+        )
+          localStorage.setItem(key, version);
+        subscribe(type, listener, options);
+      };
+    },
+    { key: AGREEMENT_KEY, version: POLICY_VERSION },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("checkbox")).toBeChecked();
+  await expect(page.getByRole("link", { name: "QQ 登录" })).toBeEnabled();
+});
+
 test("跨标签页确认及清除同步到已打开的登录弹窗", async ({ page, context }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "登录", exact: true }).click();
   const other = await context.newPage();
   await other.goto("/terms");
+  await other.bringToFront();
   await other.evaluate(
     ({ agreement, cookie, version }) => {
       localStorage.setItem(agreement, version);
@@ -160,11 +183,15 @@ test("跨标签页确认及清除同步到已打开的登录弹窗", async ({ pa
       version: POLICY_VERSION,
     },
   );
+  // 模拟用户切回原标签页后查看确认状态。
+  await page.bringToFront();
   await expect(page.getByRole("checkbox")).toBeChecked();
   await expect(page.getByRole("region", { name: "Cookie 提示" })).toHaveCount(
     0,
   );
+  await other.bringToFront();
   await other.evaluate(() => localStorage.clear());
+  await page.bringToFront();
   await expect(page.getByRole("checkbox")).not.toBeChecked();
   await expect(page.getByRole("region", { name: "Cookie 提示" })).toBeVisible();
   await other.close();
