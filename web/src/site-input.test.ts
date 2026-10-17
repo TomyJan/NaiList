@@ -15,6 +15,8 @@ describe("奶站域名", () => {
     ["example.com#here", "example.com"],
     ["sub.example.com", "sub.example.com"],
     ["https://www.甘肃奶龙大学.com/首页", "xn--psszg58cy52cu6lj57b.com"],
+    ["https://www.例子.中国/首页", "xn--fsqu00a.xn--fiqs8s"],
+    ["example.中国", "example.xn--fiqs8s"],
   ])("从 %s 保留域名", (value, expected) => {
     expect(normalizeDomain(value)).toBe(expected);
   });
@@ -40,6 +42,10 @@ describe("奶站域名", () => {
     "例子%2ecom",
     "例子.com\\evil",
     "例 子.com",
+    "example.xn--",
+    "example.xn--a",
+    "example.xn--abc-",
+    `example.xn--${"a".repeat(60)}`,
   ])("拒绝非法域名 %s", (domain) => {
     expect(
       validateSiteInput({ name: "奶站", organization: "大学", domain }),
@@ -75,6 +81,17 @@ describe("奶站域名", () => {
     const input = { name: "奶站", organization: "大学", domain: "example.com" };
     for (const field of ["name", "organization", "domain"] as const)
       expect(validateSiteInput({ ...input, [field]: " " })).toBeTruthy();
+  });
+  it.each([
+    ["例子.中国", "xn--fsqu00a.xn--fiqs8s"],
+    ["example.中国", "example.xn--fiqs8s"],
+    ["xn--fsqu00a.xn--fiqs8s", "xn--fsqu00a.xn--fiqs8s"],
+  ])("中文后缀 %s 可规范化并通过校验", (value, expected) => {
+    const domain = normalizeDomain(value);
+    expect(domain).toBe(expected);
+    expect(
+      validateSiteInput({ name: "奶站", organization: "大学", domain }),
+    ).toBeNull();
   });
 });
 describe("奶站本地搜索", () => {
@@ -114,6 +131,8 @@ describe("奶站本地搜索", () => {
 describe("域名显示", () => {
   it.each([
     ["xn--psszg58cy52cu6lj57b.com", "甘肃奶龙大学.com"],
+    ["xn--fsqu00a.xn--fiqs8s", "例子.中国"],
+    ["example.xn--fiqs8s", "example.中国"],
     ["lut.example.com", "lut.example.com"],
     ["甘肃奶龙大学.com", "甘肃奶龙大学.com"],
     ["xn--.com", "xn--.com"],

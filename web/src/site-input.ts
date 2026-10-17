@@ -30,7 +30,17 @@ export function displayDomain(domain: string): string {
 }
 
 const domainPattern =
-  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9](?:[a-z0-9-]{0,57}[a-z0-9])?)$/i;
+
+function isValidDomain(value: string): boolean {
+  if (!domainPattern.test(value)) return false;
+  try {
+    // URL parsing validates Punycode labels, including internationalized TLDs.
+    return new URL(`https://${value}`).hostname === value.toLowerCase();
+  } catch {
+    return false;
+  }
+}
 
 export function validateSiteInput(input: SiteInput): string | null {
   if (!input.name.trim() || Array.from(input.name.trim()).length > 32)
@@ -40,7 +50,7 @@ export function validateSiteInput(input: SiteInput): string | null {
     Array.from(input.organization.trim()).length > 32
   )
     return "学校/单位必填，最多 32 字";
-  if (!domainPattern.test(input.domain.trim()))
+  if (!isValidDomain(input.domain.trim()))
     return "请输入有效域名，如 甘肃奶龙大学.com";
   return null;
 }

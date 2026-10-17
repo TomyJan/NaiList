@@ -28,7 +28,9 @@ type Input struct {
 var ErrNotFound = errors.New("站点不存在或无权操作")
 var ErrDuplicate = errors.New("此域名已存在, 请前往首页搜索查看")
 var labelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
-var tldPattern = regexp.MustCompile(`^[a-z]{2,63}$`)
+
+// Normalize validates IDNA before accepting an internationalized TLD's A-label.
+var tldPattern = regexp.MustCompile(`^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$`)
 
 func Normalize(in Input) (Site, error) {
 	s := Site{Name: strings.TrimSpace(in.Name), Domain: strings.TrimPrefix(strings.ToLower(strings.TrimSpace(in.Domain)), "www."), Organization: strings.TrimSpace(in.Organization)}

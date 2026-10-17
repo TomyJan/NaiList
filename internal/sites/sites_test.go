@@ -38,3 +38,22 @@ func TestNormalizeChineseDomain(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeInternationalTLD(t *testing.T) {
+	for input, want := range map[string]string{
+		"例子.中国":                  "xn--fsqu00a.xn--fiqs8s",
+		" WWW.例子.中国 ":            "xn--fsqu00a.xn--fiqs8s",
+		"xn--fsqu00a.xn--fiqs8s": "xn--fsqu00a.xn--fiqs8s",
+		"example.中国":             "example.xn--fiqs8s",
+	} {
+		got, err := Normalize(Input{Name: "奶站", Domain: input, Organization: "大学"})
+		if err != nil || got.Domain != want {
+			t.Errorf("%q: got %q, err %v; want %q", input, got.Domain, err, want)
+		}
+	}
+	for _, domain := range []string{"example.xn--", "example.xn--a", "example.xn--abc-", "example.xn--" + strings.Repeat("a", 60)} {
+		if _, err := Normalize(Input{Name: "奶站", Domain: domain, Organization: "大学"}); err == nil {
+			t.Errorf("accepted invalid IDN %q", domain)
+		}
+	}
+}
