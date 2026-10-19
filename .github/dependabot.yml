@@ -5,6 +5,11 @@ updates:
     directory: /web
     schedule:
       interval: daily
+    groups:
+      react-runtime:
+        patterns:
+          - react
+          - react-dom
   - package-ecosystem: gomod
     directory: /
     schedule:
