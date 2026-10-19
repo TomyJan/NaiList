@@ -6,11 +6,16 @@ export default defineConfig({
     baseURL: process.env.TEST_APP_URL || "http://127.0.0.1:8088",
     channel: "chrome",
     headless: true,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
-  reporter: "list",
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
+  // Stop systemic failures while leaving time for CI to upload diagnostics.
+  maxFailures: process.env.CI ? 5 : undefined,
+  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
   projects: [
     { name: "light", use: { colorScheme: "light" } },
     { name: "dark", use: { colorScheme: "dark" } },
   ],
-  workers: 1,
+  workers: process.env.CI ? 2 : 1,
 });

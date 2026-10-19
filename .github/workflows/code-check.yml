@@ -156,6 +156,7 @@ jobs:
       - run: pnpm exec playwright install --with-deps chrome
         working-directory: web
       - name: Start backend and run browser tests
+        timeout-minutes: 17
         shell: bash
         run: |
           go build -o "$RUNNER_TEMP/nailist" ./cmd/server
@@ -164,13 +165,13 @@ jobs:
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT
           ready=0
           for attempt in {1..30}; do
-            if curl --fail --silent "$PUBLIC_URL/api/health" > /dev/null; then ready=1; break; fi
+            if curl --fail --silent --connect-timeout 2 --max-time 3 "$PUBLIC_URL/api/health" > /dev/null; then ready=1; break; fi
             sleep 1
           done
           if [ "$ready" != 1 ]; then cat server.log; exit 1; fi
           pnpm --dir web run test:e2e
       - uses: actions/upload-artifact@v7
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         with:
           name: browser-test-results
           path: |
