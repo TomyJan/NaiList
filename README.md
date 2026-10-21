@@ -114,7 +114,7 @@ chmod +x nailist
 
 ## 本地开发
 
-需要 Go 1.26.9+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并在仓库根目录配置 `.env`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
+需要 Go 1.26.10+、Node.js 22.12+、pnpm 10.34.6、PostgreSQL 16+。创建数据库并在仓库根目录配置 `.env`。pnpm 版本固定在 `web/package.json`，可执行 `npm install -g pnpm@10.34.6` 安装。从仓库根目录构建前端并启动后端：
 
 ```sh
 cd web && pnpm install --frozen-lockfile && pnpm run build && cd ..
