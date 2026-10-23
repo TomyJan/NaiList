@@ -24,8 +24,8 @@ importers:
         specifier: 11.1.0
         version: 11.1.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       zxing-wasm:
-        specifier: 3.1.5
-        version: 3.1.5(@types/emscripten@1.41.6)
+        specifier: 3.1.6
+        version: 3.1.6(@types/emscripten@1.41.6)
     devDependencies:
       '@playwright/test':
         specifier: ^1.64.1
@@ -668,8 +668,8 @@ packages:
     engines: {node: '>=20.11'}
     hasBin: true
 
-  zxing-wasm@3.1.5:
-    resolution: {integrity: sha512-jmxXvTCR/qZxMz2XwR6V+nL2BlDTD1aux7ZWSH9BV77TG9u4k0VyHba/NCCHBHJ60Wg6VV0QL/SMlJczKhJI4w==}
+  zxing-wasm@3.1.6:
+    resolution: {integrity: sha512-mU7UNuvl+hOT+nlSOQTMHZ2tM8lRMsbjDIp5IO/+HmBl/FOq77q0OSZPJ3cm42A9c1MKU6Uve67FiGdkhsrT9g==}
     peerDependencies:
       '@types/emscripten': '>=1.39.6'
 
@@ -1060,7 +1060,7 @@ snapshots:
 
   why-is-node-running@3.2.1: {}
 
-  zxing-wasm@3.1.5(@types/emscripten@1.41.6):
+  zxing-wasm@3.1.6(@types/emscripten@1.41.6):
     dependencies:
       '@types/emscripten': 1.41.6
       type-fest: 5.10.0
