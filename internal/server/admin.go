@@ -93,12 +93,12 @@ func (s *Server) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	actor := r.Context().Value(userKey).(User).ID
 	requestDetails(r, "account_id", id)
 	revoked, err := (admin.Store{DB: s.db}).DeleteUser(r.Context(), actor, id)
+	s.groupsCache.afterWrite(r.Context(), "groups", err)
+	s.sitesCache.afterWrite(r.Context(), "sites", err)
 	if err != nil {
 		adminError(w, r, err)
 		return
 	}
-	s.groupsCache.invalidate(r.Context(), "groups")
-	s.sitesCache.invalidate(r.Context(), "sites")
 	requestLogger(r).InfoContext(r.Context(), "管理员已删除账号及历史资源", "component", "admin", "event", "admin.user.deleted", "outcome", "success", "admin_id", actor, "account_id", id, "revoked_sessions", revoked.RevokedSessions, "deleted_flows", revoked.DeletedFlows, "deleted_identities", revoked.DeletedIdentities, "deleted_groups", revoked.DeletedGroups, "deleted_sites", revoked.DeletedSites, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
 }
@@ -135,11 +135,11 @@ func (s *Server) adminSaveGroup(w http.ResponseWriter, r *http.Request) {
 	requestDetails(r, "group_id", id, "new_owner_id", in.OwnerID)
 	requestLogger(r).DebugContext(r.Context(), "管理奶群表单通过校验，准备原子保存信息与归属", "component", "admin", "event", "admin.group.save.started", "group_id", id, "new_owner_id", in.OwnerID, "organization", g.Organization, "qq_number", g.QQNumber, "keyword_count", len(g.Keywords), "link_format", joinLinkFormat(g.JoinURL))
 	saved, old, err := (admin.Store{DB: s.db}).SaveGroup(r.Context(), id, in.OwnerID, g)
+	s.groupsCache.afterWrite(r.Context(), "groups", err)
 	if err != nil {
 		adminError(w, r, err)
 		return
 	}
-	s.groupsCache.invalidate(r.Context(), "groups")
 	requestLogger(r).InfoContext(r.Context(), "管理员已保存奶群信息及归属", "component", "admin", "event", "admin.group.saved", "outcome", "success", "admin_id", r.Context().Value(userKey).(User).ID, "group_id", id, "old_owner_id", old, "new_owner_id", in.OwnerID, "organization", saved.Organization, "qq_number", saved.QQNumber, "keyword_count", len(saved.Keywords), "link_format", joinLinkFormat(saved.JoinURL), "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, saved)
 }

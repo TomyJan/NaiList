@@ -60,6 +60,11 @@ export function GroupForm({
   }, []);
   const field = (key: keyof GroupInput, value: string) =>
     setInput((current) => ({ ...current, [key]: value }));
+  const editLink = (value: string) => {
+    qrGeneration.current++;
+    setReading(false);
+    field("joinUrl", value);
+  };
   const readQRCode = async (file: File) => {
     const generation = ++qrGeneration.current;
     setReading(true);
@@ -184,11 +189,11 @@ export function GroupForm({
               disabled={busy}
               maxLength={2048}
               value={input.joinUrl}
-              onChange={(e) => field("joinUrl", e.target.value)}
+              onChange={(e) => editLink(e.target.value)}
               onPaste={(e) => {
                 e.preventDefault();
                 const text = e.clipboardData.getData("text");
-                field("joinUrl", extractJoinLink(text) ?? text.trim());
+                editLink(extractJoinLink(text) ?? text.trim());
               }}
               placeholder="粘贴 QQ 群链接或分享文本"
             />

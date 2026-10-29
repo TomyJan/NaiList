@@ -94,11 +94,11 @@ func (s *Server) saveSite(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	requestLogger(r).DebugContext(r.Context(), "站点表单通过校验，准备保存", "component", "sites", "event", "sites.save.started", "site_id", id, "domain", site.Domain, "name", site.Name, "organization", site.Organization)
 	site, err = s.siteStore.Save(r.Context(), owner, id, site)
+	s.sitesCache.afterWrite(r.Context(), "sites", err)
 	if err != nil {
 		failOperation(w, r, err, "sites.save.failed", "store_failed", "site_id", id, "domain", site.Domain)
 		return
 	}
-	s.sitesCache.invalidate(r.Context(), "sites")
 	status := 200
 	if id == 0 {
 		status = 201
@@ -115,11 +115,12 @@ func (s *Server) removeSite(w http.ResponseWriter, r *http.Request) {
 	owner := r.Context().Value(userKey).(User).ID
 	started := time.Now()
 	requestLogger(r).DebugContext(r.Context(), "按站点 ID 和所属账号执行软删除", "component", "sites", "event", "sites.delete.started", "site_id", id)
-	if err := s.siteStore.Delete(r.Context(), owner, id); err != nil {
+	err := s.siteStore.Delete(r.Context(), owner, id)
+	s.sitesCache.afterWrite(r.Context(), "sites", err)
+	if err != nil {
 		failOperation(w, r, err, "sites.delete.failed", "store_failed", "site_id", id)
 		return
 	}
-	s.sitesCache.invalidate(r.Context(), "sites")
 	requestDetails(r, "site_id", id)
 	requestLogger(r).InfoContext(r.Context(), "站点已软删除", "component", "sites", "event", "sites.delete.completed", "outcome", "success", "site_id", id, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)
@@ -160,11 +161,11 @@ func (s *Server) adminSaveSite(w http.ResponseWriter, r *http.Request) {
 	requestDetails(r, "site_id", id, "new_owner_id", in.OwnerID)
 	requestLogger(r).DebugContext(r.Context(), "管理站点表单通过校验，准备原子保存信息与归属", "component", "admin", "event", "admin.site.save.started", "site_id", id, "new_owner_id", in.OwnerID, "domain", site.Domain, "name", site.Name, "organization", site.Organization)
 	saved, old, err := (admin.Store{DB: s.db}).SaveSite(r.Context(), id, in.OwnerID, site)
+	s.sitesCache.afterWrite(r.Context(), "sites", err)
 	if err != nil {
 		adminError(w, r, err)
 		return
 	}
-	s.sitesCache.invalidate(r.Context(), "sites")
 	requestLogger(r).InfoContext(r.Context(), "管理员已保存站点信息及归属", "component", "admin", "event", "admin.site.saved", "outcome", "success", "admin_id", r.Context().Value(userKey).(User).ID, "site_id", id, "old_owner_id", old, "new_owner_id", in.OwnerID, "domain", saved.Domain, "name", saved.Name, "organization", saved.Organization, "duration_ms", logging.DurationMS(started))
 	respond(w, r, 200, saved)
 }

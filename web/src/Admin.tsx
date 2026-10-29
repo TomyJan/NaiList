@@ -14,8 +14,12 @@ import { AdminOverview } from "./AdminOverview";
 import { GroupForm } from "./GroupForm";
 import { SiteForm } from "./SiteForm";
 import { displayDomain } from "./site-input";
-import { clearSiteDraft } from "./site-drafts";
-import { clearAccountDrafts, clearGroupDraft } from "./group-drafts";
+import { clearSubmittedSiteDraft, readSiteDraft } from "./site-drafts";
+import {
+  clearAccountDrafts,
+  clearSubmittedGroupDraft,
+  readGroupDraft,
+} from "./group-drafts";
 import { notify } from "./notifications";
 import type {
   AdminGroup,
@@ -151,8 +155,9 @@ export function Admin({
   };
   const save = async (input: GroupInput, ownerId?: number) => {
     if (!editor || !user) return;
+    const submitted = readGroupDraft(user.id, editor.id, "admin");
     await write(`/api/admin/groups/${editor.id}`, "PUT", { ...input, ownerId });
-    clearGroupDraft(user.id, editor.id, "admin");
+    clearSubmittedGroupDraft(user.id, editor.id, submitted, "admin");
     if (!mounted.current) return;
     setEditor(null);
     setRevision((value) => value + 1);
@@ -163,11 +168,12 @@ export function Admin({
   };
   const saveSite = async (input: SiteInput, ownerId?: number) => {
     if (!siteEditor || !user) return;
+    const submitted = readSiteDraft(user.id, siteEditor.id, "admin");
     await write(`/api/admin/sites/${siteEditor.id}`, "PUT", {
       ...input,
       ownerId,
     });
-    clearSiteDraft(user.id, siteEditor.id, "admin");
+    clearSubmittedSiteDraft(user.id, siteEditor.id, submitted, "admin");
     if (!mounted.current) return;
     setSiteEditor(null);
     setRevision((value) => value + 1);

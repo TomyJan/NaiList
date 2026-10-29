@@ -29,8 +29,11 @@ export function readGroupDraft(
         (field) =>
           typeof (stored as Record<string, unknown>)[field] === "string",
       )
-    )
-      return stored as GroupDraft;
+    ) {
+      const draft = stored as GroupDraft;
+      memory.set(draftKey, draft);
+      return draft;
+    }
   } catch {
     /* Keep editing when browser storage is unavailable. */
   }
@@ -43,12 +46,24 @@ export function writeGroupDraft(
   scope: DraftScope = "personal",
 ) {
   const draftKey = key(account, group, scope);
-  memory.set(draftKey, input);
+  // Every write gets a new identity, even when values change back (ABA).
+  memory.set(draftKey, { ...input });
   try {
     sessionStorage.setItem(draftKey, JSON.stringify(input));
   } catch {
     /* Memory remains available. */
   }
+}
+
+// Capture readGroupDraft before awaiting a save. Never clear a later write.
+export function clearSubmittedGroupDraft(
+  account: number,
+  group: number | undefined,
+  submitted: GroupDraft | undefined,
+  scope: DraftScope = "personal",
+) {
+  if (submitted && readGroupDraft(account, group, scope) === submitted)
+    clearGroupDraft(account, group, scope);
 }
 
 export function clearGroupDraft(

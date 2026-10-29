@@ -3,13 +3,18 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 
+	"nailist/internal/admin"
+	"nailist/internal/groups"
 	"nailist/internal/logging"
+	"nailist/internal/resources"
+	"nailist/internal/sites"
 )
 
-// Public snapshots are immutable, encoded once, and valid until a successful write.
+// Public snapshots are immutable, encoded once, and valid until a possible write.
 // A generation prevents an in-flight query from restoring invalidated data.
 type listSnapshot struct {
 	body  []byte
@@ -96,7 +101,22 @@ func (c *listCache) invalidate(ctx context.Context, resource string) {
 	c.valid, c.snapshot = false, listSnapshot{}
 	generation := c.generation
 	c.mu.Unlock()
-	logging.FromContext(ctx).DebugContext(ctx, "列表变更已提交，内存缓存已失效，下次公开读取重新查询数据库", "component", "cache", "event", "lists.cache.invalidated", "resource", resource, "generation", generation)
+	logging.FromContext(ctx).DebugContext(ctx, "列表可能已变更，内存缓存已失效，下次公开读取重新查询数据库", "component", "cache", "event", "lists.cache.invalidated", "resource", resource, "generation", generation)
+}
+
+// A transport error (including cancellation or timeout) can lose the commit
+// acknowledgement. Only known business rejections prove that nothing changed.
+func (c *listCache) afterWrite(ctx context.Context, resource string, err error) {
+	for _, rejected := range []error{
+		groups.ErrNotFound, groups.ErrDuplicate, sites.ErrNotFound, sites.ErrDuplicate,
+		resources.ErrActiveQuota, resources.ErrTotalQuota, admin.ErrNotFound,
+		admin.ErrLastIdentity, admin.ErrOwnAccount, admin.ErrActiveGroups, admin.ErrActiveSites,
+	} {
+		if errors.Is(err, rejected) {
+			return
+		}
+	}
+	c.invalidate(ctx, resource)
 }
 
 func respondList(w http.ResponseWriter, r *http.Request, snapshot listSnapshot) {

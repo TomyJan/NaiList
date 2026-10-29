@@ -287,11 +287,11 @@ func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	requestLogger(r).DebugContext(r.Context(), "奶群表单已通过校验，开始持久化", "component", "groups", "event", "groups.save.started", "group_id", id, "organization", g.Organization, "qq_number", g.QQNumber, "keyword_count", len(g.Keywords), "link_format", joinLinkFormat(g.JoinURL))
 	g, err = s.store.Save(r.Context(), u.ID, id, g)
+	s.groupsCache.afterWrite(r.Context(), "groups", err)
 	if err != nil {
 		failOperation(w, r, err, "groups.save.failed", "store_failed", "group_id", id, "qq_number", in.QQNumber)
 		return
 	}
-	s.groupsCache.invalidate(r.Context(), "groups")
 	status := 200
 	if id == 0 {
 		status = 201
@@ -313,11 +313,12 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 	u := r.Context().Value(userKey).(User)
 	started := time.Now()
 	requestLogger(r).DebugContext(r.Context(), "按群 ID 和所属账号执行软删除", "component", "groups", "event", "groups.delete.started", "group_id", id)
-	if err := s.store.Delete(r.Context(), u.ID, id); err != nil {
+	err = s.store.Delete(r.Context(), u.ID, id)
+	s.groupsCache.afterWrite(r.Context(), "groups", err)
+	if err != nil {
 		failOperation(w, r, err, "groups.delete.failed", "store_failed", "group_id", id)
 		return
 	}
-	s.groupsCache.invalidate(r.Context(), "groups")
 	requestDetails(r, "group_id", id)
 	requestLogger(r).InfoContext(r.Context(), "奶群已软删除，将不再出现在公开列表", "component", "groups", "event", "groups.delete.completed", "outcome", "success", "group_id", id, "duration_ms", logging.DurationMS(started))
 	w.WriteHeader(204)

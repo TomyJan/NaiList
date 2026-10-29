@@ -3,14 +3,63 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"nailist/internal/admin"
 	"nailist/internal/groups"
+	"nailist/internal/resources"
+	"nailist/internal/sites"
 )
+
+func TestPublicCacheWriteErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		reload bool
+	}{
+		{"success", nil, true},
+		{"canceled", fmt.Errorf("write: %w", context.Canceled), true},
+		{"timeout", fmt.Errorf("write: %w", context.DeadlineExceeded), true},
+		{"connection", fmt.Errorf("write: %w", io.ErrUnexpectedEOF), true},
+		{"unknown", errors.New("unknown database failure"), true},
+		{"missing group", fmt.Errorf("write: %w", groups.ErrNotFound), false},
+		{"duplicate group", fmt.Errorf("write: %w", groups.ErrDuplicate), false},
+		{"missing site", fmt.Errorf("write: %w", sites.ErrNotFound), false},
+		{"duplicate site", fmt.Errorf("write: %w", sites.ErrDuplicate), false},
+		{"active quota", fmt.Errorf("write: %w", resources.ErrActiveQuota), false},
+		{"total quota", fmt.Errorf("write: %w", resources.ErrTotalQuota), false},
+		{"missing owner", fmt.Errorf("write: %w", admin.ErrNotFound), false},
+		{"active groups", fmt.Errorf("write: %w", admin.ErrActiveGroups), false},
+		{"active sites", fmt.Errorf("write: %w", admin.ErrActiveSites), false},
+		{"own account", fmt.Errorf("write: %w", admin.ErrOwnAccount), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var cache listCache
+			loads := 0
+			load := func(context.Context) (listSnapshot, error) { loads++; return listSnapshot{body: []byte("fresh")}, nil }
+			if _, err := cache.get(context.Background(), "groups", load); err != nil {
+				t.Fatal(err)
+			}
+			cache.afterWrite(context.Background(), "groups", tc.err)
+			if _, err := cache.get(context.Background(), "groups", load); err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if tc.reload {
+				want = 2
+			}
+			if loads != want {
+				t.Fatalf("loads=%d, want %d", loads, want)
+			}
+		})
+	}
+}
 
 func TestPostgresPublicListCacheLifecycle(t *testing.T) {
 	db := securityDatabase(t)

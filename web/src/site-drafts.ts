@@ -25,8 +25,11 @@ export function readSiteDraft(
         (field) =>
           typeof (stored as Record<string, unknown>)[field] === "string",
       )
-    )
-      return stored as SiteDraft;
+    ) {
+      const draft = stored as SiteDraft;
+      memory.set(draftKey, draft);
+      return draft;
+    }
   } catch {
     /* Editing stays available when storage is disabled. */
   }
@@ -38,13 +41,25 @@ export function writeSiteDraft(
   scope: DraftScope = "personal",
 ) {
   const draftKey = key(account, site, scope);
-  memory.set(draftKey, input);
+  // Every write gets a new identity, even when values change back (ABA).
+  memory.set(draftKey, { ...input });
   try {
     sessionStorage.setItem(draftKey, JSON.stringify(input));
   } catch {
     /* Memory remains available. */
   }
 }
+// Capture readSiteDraft before awaiting a save. Never clear a later write.
+export function clearSubmittedSiteDraft(
+  account: number,
+  site: number | undefined,
+  submitted: SiteDraft | undefined,
+  scope: DraftScope = "personal",
+) {
+  if (submitted && readSiteDraft(account, site, scope) === submitted)
+    clearSiteDraft(account, site, scope);
+}
+
 export function clearSiteDraft(
   account: number,
   site?: number,

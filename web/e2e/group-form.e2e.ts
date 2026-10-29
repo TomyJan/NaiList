@@ -325,6 +325,135 @@ test("QQ 异形二维码实图识别", async ({ page }) => {
   );
 });
 
+for (const action of [
+  "input",
+  "paste",
+  "undo",
+  "close",
+  "other-field",
+  "reselect",
+  "late-error",
+] as const) {
+  test(`慢二维码解析与 ${action} 互斥且不会覆盖后续编辑`, async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.assign(window, { qrCompleted: 0 });
+      const revoke = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = (url) => {
+        (window as unknown as { qrCompleted: number }).qrCompleted++;
+        revoke(url);
+      };
+    });
+    let release!: () => void;
+    let started!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const requested = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    await page.route("**/*.wasm", async (route) => {
+      const response = await route.fetch();
+      started();
+      await pending;
+      await route.fulfill({ response });
+    });
+    const state = await mockEditor(page);
+    await page.getByRole("button", { name: "添加奶群" }).click();
+    await page.getByLabel("学校 / 单位").fill("保存学校");
+    await page.getByLabel("群号", { exact: true }).fill("123456789");
+    const link = page.getByLabel("群链接");
+    const manual = "https://qm.qq.com/q/manual-latest";
+    await link.fill("https://qm.qq.com/q/before");
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(
+        fileURLToPath(
+          new URL(
+            action === "late-error"
+              ? "./fixtures/other-qr.png"
+              : "./fixtures/group-qr.png",
+            import.meta.url,
+          ),
+        ),
+      );
+    await requested;
+    await expect(
+      page.getByRole("button", { name: "解析中…", exact: true }),
+    ).toBeDisabled();
+    if (action === "paste") {
+      await link.evaluate((element, value) => {
+        const clipboardData = new DataTransfer();
+        clipboardData.setData("text/plain", `点击链接加入群聊：${value}`);
+        element.dispatchEvent(
+          new ClipboardEvent("paste", {
+            clipboardData,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }, manual);
+    } else if (["input", "reselect", "late-error"].includes(action)) {
+      await link.fill(manual);
+    } else if (action === "undo") {
+      await page.getByRole("button", { name: "撤销", exact: true }).click();
+    } else if (action === "close") {
+      await page.getByRole("button", { name: "取消", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await page.getByRole("button", { name: "添加奶群" }).click();
+    } else {
+      await page.getByLabel("学校 / 单位").fill("其他字段继续编辑");
+    }
+    if (action === "reselect") {
+      const chooser = page.waitForEvent("filechooser");
+      await page
+        .getByRole("button", { name: "从二维码解析", exact: true })
+        .click();
+      await (
+        await chooser
+      ).setFiles(
+        fileURLToPath(
+          new URL("./fixtures/styled-group-qr.png", import.meta.url),
+        ),
+      );
+    }
+    release();
+    // qr.ts revokes the object URL in finally: the real WASM decode has now
+    // finished, including failures, even if manual editing reset reading early.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { qrCompleted: number }).qrCompleted,
+        ),
+      )
+      .toBe(action === "reselect" ? 2 : 1);
+    await expect(link).toHaveValue(
+      action === "undo"
+        ? ""
+        : action === "close"
+          ? "https://qm.qq.com/q/before"
+          : action === "other-field"
+            ? "https://qm.qq.com/q/AjLVv044nu"
+            : action === "reselect"
+              ? "https://qm.qq.com/q/styled-test"
+              : manual,
+    );
+    if (["input", "paste", "undo", "close", "late-error"].includes(action)) {
+      await expect(page.getByRole("alert")).toHaveCount(0);
+    }
+    if (["input", "paste", "late-error", "reselect"].includes(action)) {
+      await expect(
+        page.getByRole("button", { name: "保存", exact: true }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "保存", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(state.writes[0]).toMatchObject({
+        joinUrl:
+          action === "reselect" ? "https://qm.qq.com/q/styled-test" : manual,
+      });
+    }
+  });
+}
+
 test("前端校验拦截非法输入，不发写入请求", async ({ page }) => {
   const state = await mockEditor(page);
   await page.getByRole("button", { name: "添加奶群" }).click();

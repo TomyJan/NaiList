@@ -16,8 +16,16 @@ import { api, ApiError, writeOptions } from "./api";
 import { GroupForm, DeleteDialog } from "./GroupForm";
 import { SiteForm } from "./SiteForm";
 import { ListTabs, type ListKind } from "./ListTabs";
-import { clearGroupDraft } from "./group-drafts";
-import { clearSiteDraft } from "./site-drafts";
+import {
+  clearGroupDraft,
+  clearSubmittedGroupDraft,
+  readGroupDraft,
+} from "./group-drafts";
+import {
+  clearSiteDraft,
+  clearSubmittedSiteDraft,
+  readSiteDraft,
+} from "./site-drafts";
 import { filterGroups } from "./search";
 import { displayDomain, filterSites } from "./site-input";
 import { shuffleGroups } from "./group-order";
@@ -132,13 +140,18 @@ export function Directory({
   const save = async (input: GroupInput | SiteInput) => {
     if (!editor || !user) return;
     const { kind: resource, item } = editor;
+    const groupDraft =
+      resource === "groups" ? readGroupDraft(user.id, item?.id) : undefined;
+    const siteDraft =
+      resource === "sites" ? readSiteDraft(user.id, item?.id) : undefined;
     await write(
       `/api/${resource}${item ? `/${item.id}` : ""}`,
       item ? "PUT" : "POST",
       input,
     );
-    if (resource === "groups") clearGroupDraft(user.id, item?.id);
-    else clearSiteDraft(user.id, item?.id);
+    if (resource === "groups")
+      clearSubmittedGroupDraft(user.id, item?.id, groupDraft);
+    else clearSubmittedSiteDraft(user.id, item?.id, siteDraft);
     if (!mounted.current) return;
     setEditor(null);
     refresh();
