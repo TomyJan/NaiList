@@ -176,6 +176,59 @@ p {
   top: 0;
   z-index: 10;
   backdrop-filter: blur(16px);
+  transform: translateY(var(--nav-offset, 0px));
+}
+.back-to-top {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: calc(
+    max(24px, env(safe-area-inset-bottom)) + var(--cookie-notice-space)
+  );
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #dbd6ca;
+  border-radius: 50%;
+  color: #8a6500;
+  background: #fff;
+  box-shadow: 0 4px 18px #352c161a;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms var(--motion-ease),
+    visibility 160ms;
+}
+.back-to-top[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.back-to-top:hover {
+  background: #fff8de;
+  border-color: #c6aa51;
+}
+@media (prefers-color-scheme: dark) {
+  .back-to-top {
+    color: #e8d9a0;
+    background: #26231b;
+    border-color: #554d37;
+  }
+  .back-to-top:hover {
+    background: #393121;
+    border-color: #9d8545;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top {
+    transition: none;
+  }
 }
 .nav-inner {
   max-width: 1040px;

@@ -14,6 +14,7 @@ import { PageTransition, Presence } from "./motion";
 import { AudioButton } from "./AudioButton";
 import type { User, LoginProvider } from "./types";
 import { CookieNotice, LegalPage } from "./Legal";
+import { ScrollNavigation } from "./ScrollNavigation";
 
 export default function App() {
   const [path, setPath] = useState(location.pathname);
@@ -154,7 +155,7 @@ export default function App() {
   };
   return (
     <>
-      <header className="nav">
+      <ScrollNavigation route={path} locked={menu || loginDialog}>
         <div className="nav-inner">
           <a
             className="brand"
@@ -269,7 +270,7 @@ export default function App() {
             )}
           </div>
         </div>
-      </header>
+      </ScrollNavigation>
       <PageTransition value={path}>
         {legalPage ? (
           <LegalPage page={legalPage} />
