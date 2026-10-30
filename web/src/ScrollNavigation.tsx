@@ -41,6 +41,7 @@ export function ScrollNavigation({
       setShowBackToTop(next);
     };
     const reveal = () => {
+      if (!document.activeElement?.matches(":focus-visible")) return;
       offset = 0;
       nav.style.setProperty("--nav-offset", "0px");
     };

@@ -63,6 +63,16 @@ test("顶栏按滚动距离逐步收起和露出，停止滚动不会自行完�
   expect(await navOffset(page)).toBeCloseTo(0, 0);
 });
 
+test("半隐藏顶栏的登录按钮首次鼠标点击生效", async ({ page }) => {
+  await setup(page);
+  await scroll(page, 20);
+  const box = await page.locator(".login").boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  // Click the visible upper edge: pointer focus must not move the target.
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + 3);
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
 test("回顶按钮只在滚过一屏后上滑时显示，下滑和回顶后隐藏", async ({ page }) => {
   await setup(page);
   const button = page.getByRole("button", { name: "回到顶部", exact: true });
