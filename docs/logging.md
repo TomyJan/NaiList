@@ -4,67 +4,76 @@
 
 ## 等级
 
-| 级别 | 用途 |
-| --- | --- |
+| 级别  | 用途                                                                                                                |
+| ----- | ------------------------------------------------------------------------------------------------------------------- |
 | DEBUG | 处理路径与分支：请求开始、会话状态、输入校验、数据库操作、OAuth 各阶段、账号匹配/事务、资源加载、健康检查、资源释放 |
-| INFO | 运维与业务结果：启动/就绪/停机、普通 API 汇总、已提交的增改删/账号绑定、成功登录/退出、客户端取消、普通 404 汇总 |
-| WARN | 可预期拒绝及退化：输入/权限/身份冲突、认证验证失败、超时、慢操作、响应中断、辅助清理失败 |
-| ERROR | 需要排查的故障：启动失败、未恢复的数据库/上游/内部错误、panic、异常退出 |
+| INFO  | 运维与业务结果：启动/就绪/停机、普通 API 汇总、已提交的增改删/账号绑定、成功登录/退出、客户端取消、普通 404 汇总    |
+| WARN  | 可预期拒绝及退化：输入/权限/身份冲突、认证验证失败、超时、慢操作、响应中断、辅助清理失败                            |
+| ERROR | 需要排查的故障：启动失败、未恢复的数据库/上游/内部错误、panic、异常退出                                             |
 
-普通 404、匿名/失效会话不视为服务故障。超时与客户端取消分别为 WARN 与 INFO。低层数据库/上游失败先保留 DEBUG 诊断，由业务层记录最终错误；某请求已记录 ERROR 后，其汇总为 WARN，避免同一故障重复 ERROR。账号和群信息只有数据库提交成功后才记录业务成功；响应投递失败另记 WARN，不会把已提交操作描述为回滚。
+普通 404、匿名/失效会话不视为服务故障。超时与客户端取消分别为 WARN 与 INFO。低层数据库/上游失败先保留 DEBUG 诊断，由业务层记录最终错误；某请求已记录 ERROR 后，其汇总为 WARN，避免同一故障重复 ERROR。页脚统计不可用属于可恢复退化，共享抓取失败记录一次 WARN，退避期间的请求不重复告警。账号、奶群和奶站只有数据库提交成功后才记录业务成功；响应投递失败另记 WARN，不会把已提交操作描述为回滚。
 
 慢 HTTP 请求及数据库语句/池等待阈值为 1 秒，上游 HTTP 为 3 秒。阈值属于诊断策略，不增加部署配置。
 
 ## 字段
 
-| 字段 | 含义 |
-| --- | --- |
-| `time` / `level` / `msg` | 含时区时间、等级、中文语义说明 |
-| `service` / `version` / `pid` | 应用名、编译版本、进程 ID |
-| `component` / `event` | 子系统及稳定事件名，用于聚合和检索 |
-| `operation` | 请求意图，如 `groups.create`、`auth.callback` |
-| `request_id` / `user_id` | 服务端生成的请求 ID、已认证的内部账号 ID |
-| `account_id` | 账号解析候选或已提交的目标账号；与请求的当前 `user_id` 区分，便于定位绑定冲突 |
-| `outcome` / `reason` | 处理结果及明确原因，如 `rejected` / `duplicate_qq_number` |
-| `method` / `path` / `route` | HTTP 方法、去掉查询参数的路径、路由模板 |
-| `peer_ip` | 实际 socket 对端；反向代理场景通常是代理地址，不信任客户端伪造的转发头 |
-| `status` / `duration_ms` | 已选定响应状态码、毫秒耗时；不能代表客户端已完整接收 |
-| `request_bytes` / `response_bytes` | 请求声明的 Content-Length（未知为 -1）、实际成功写出的响应字节数 |
-| `response_started` | 是否开始发送最终响应；中断前未响应时状态可为 0 |
-| `provider` / `intent` / `stage` | 登录方式、登录或绑定意图、失败/处理阶段 |
-| `error_kind` / `error_type` / `error` | 错误分类、根因 Go 类型、经过脱敏的错误说明 |
-| `sqlstate` / `constraint` | PostgreSQL 错误码及约束名称，省略含行数据的 Detail |
-| `db_operation` / `statement_id` | 数据库动作名、SQL 文本 SHA-256 的前 12 位（定位同一语句） |
-| `statement_kind` / `table` / `argument_count` / `rows_affected` | SQL 动词、允许记录的业务表名、参数数量、影响行数；不会记录 SQL/参数/结果行 |
-| `upstream_host` / `upstream_path` / `upstream_status` | 上游端点及状态码，不含查询参数 |
-| `dns_ms` / `connect_ms` / `tls_ms` / `first_byte_ms` | 上游 DNS/TCP/TLS/首字节时序；未发生的阶段为 0，例如复用连接 |
-| `connection_reused` | 是否复用连接；`upstream.request.completed` 耗时截至收到响应头，`upstream.response.completed` 另含正文读取耗时及字节数 |
+| 字段                                                            | 含义                                                                                                                  |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `time` / `level` / `msg`                                        | 含时区时间、等级、中文语义说明                                                                                        |
+| `service` / `version` / `pid`                                   | 应用名、编译版本、进程 ID                                                                                             |
+| `component` / `event`                                           | 子系统及稳定事件名，用于聚合和检索                                                                                    |
+| `operation`                                                     | 请求意图，如 `groups.create`、`auth.callback`                                                                         |
+| `request_id` / `user_id`                                        | 服务端生成的请求 ID、已认证的内部账号 ID                                                                              |
+| `account_id`                                                    | 账号解析候选或已提交的目标账号；与请求的当前 `user_id` 区分，便于定位绑定冲突                                         |
+| `admin_id` / `old_owner_id` / `new_owner_id`                    | 提交管理变更的管理员、条目变更前后的所属账号                                                                          |
+| `group_id` / `site_id`                                          | 当前操作的奶群或奶站 ID                                                                                               |
+| `resource` / `generation` / `count`                             | 列表缓存类型（groups / sites）、失效代次、命中快照的条数；并非每个事件都包含全部字段                                  |
+| `outcome` / `reason`                                            | 处理结果及明确原因，如 `rejected` / `duplicate_qq_number`                                                             |
+| `method` / `path` / `route`                                     | HTTP 方法、去掉查询参数的路径、路由模板                                                                               |
+| `peer_ip`                                                       | 实际 socket 对端；反向代理场景通常是代理地址，不信任客户端伪造的转发头                                                |
+| `status` / `duration_ms`                                        | 已选定响应状态码、毫秒耗时；不能代表客户端已完整接收                                                                  |
+| `request_bytes` / `response_bytes`                              | 请求声明的 Content-Length（未知为 -1）、实际成功写出的响应字节数                                                      |
+| `response_started`                                              | 是否开始发送最终响应；中断前未响应时状态可为 0                                                                        |
+| `provider` / `intent` / `stage`                                 | 登录方式、登录或绑定意图、失败/处理阶段                                                                               |
+| `error_kind` / `error_type` / `error`                           | 错误分类、根因 Go 类型、经过脱敏的错误说明                                                                            |
+| `sqlstate` / `constraint`                                       | PostgreSQL 错误码及约束名称，省略含行数据的 Detail                                                                    |
+| `db_operation` / `statement_id`                                 | 数据库动作名、SQL 文本 SHA-256 的前 12 位（定位同一语句）                                                             |
+| `statement_kind` / `table` / `argument_count` / `rows_affected` | SQL 动词、允许记录的业务表名、参数数量、影响行数；不会记录 SQL/参数/结果行                                            |
+| `upstream_host` / `upstream_path` / `upstream_status`           | 上游端点及状态码，不含查询参数                                                                                        |
+| `dns_ms` / `connect_ms` / `tls_ms` / `first_byte_ms`            | 上游 DNS/TCP/TLS/首字节时序；未发生的阶段为 0，例如复用连接                                                           |
+| `connection_reused`                                             | 是否复用连接；`upstream.request.completed` 耗时截至收到响应头，`upstream.response.completed` 另含正文读取耗时及字节数 |
 
 `X-Request-ID` 始终由服务器重新生成。可从浏览器网络面板取得响应头，再检索同一 ID；认证成功后的业务及最终汇总包含 `user_id`，此前事件仍可用同一请求 ID 关联。数据库后台建连没有所属请求时仅包含进程信息。
 
 ## 事件与覆盖范围
 
-| 事件 | 内容 |
-| --- | --- |
-| `app.starting` / `config.*` | 版本、Go/系统/架构、配置来源、站点、登录方式启用状态 |
-| `http.listener.bound` / `db.pool.*` / `db.migration.*` / `app.ready` | 绑定地址、数据库目标/池参数、连接验证、迁移锁等待/提交、启动耗时 |
-| `app.startup.failed` / `app.runtime.failed` | 失败阶段、原因、监听地址和排查提示 |
-| `http.request.started` / `http.request.completed` | 请求上下文、实际状态/字节数、结果/原因、耗时、业务计数 |
-| `http.request.panic` / `http.response.write_failed` | 异常堆栈、响应写入/刷新中断；已开始响应时不追加错误 JSON |
-| `groups.list.*` / `groups.save.*` / `groups.delete.*` | 查询范围/数量、校验拒绝、群 ID/学校/群号、保存或软删除结果；链接只记格式 |
-| `lists.cache.hit` / `lists.cache.load` / `lists.cache.invalidated` | DEBUG：公开 groups / sites 快照命中、数据库重建和成功写入后的失效，记录列表类型、条数或版本；查询期间失效的旧结果不会写回缓存 |
-| `auth.session.lookup` / `auth.write.*` / `auth.access.rejected` | 会话缺失/命中/未知/过期/读取失败、来源与 CSRF 校验结果 |
-| `auth.flow.*` / `auth.provider.*` / `auth.failed` | 授权流程创建与消费、QQ token/身份/资料、OIDC discovery/token/签名/nonce/userinfo/claims、明确失败阶段 |
-| `auth.profile.unavailable` | WARN：OIDC UserInfo 补充资料失败，记录固定原因和错误类别，继续使用已验证的 ID Token 登录 |
-| `account.resolve.*` / `account.created` / `account.identity.bound` | 匹配/锁/复用或创建/身份更新/提交或回滚；身份值不写日志 |
-| `auth.login.completed` / `auth.binding.completed` / `auth.logout.*` | 登录会话写入成功、身份绑定成功、会话撤销 |
-| `db.query.*` / `db.connection.*` / `db.pool.acquired` / `db.pool.slow` | 语句指纹、执行耗时、连接与池等待、错误分类 |
-| `upstream.request.*` / `upstream.response.completed` | 登录服务 HTTP 端点、状态、网络时序、连接复用、正文读取完成/中断；保留 SDK 可能丢失的原始网络错误类型 |
-| `app.shutdown.*` / `http.shutdown.*` / `app.stopped` | 停止原因、等待期限、强制关闭、请求结束、数据库池释放 |
+| 事件                                                                           | 内容                                                                                                          |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `app.starting` / `config.*`                                                    | 版本、Go/系统/架构、配置来源、站点、登录方式启用状态                                                          |
+| `http.listener.bound` / `db.pool.*` / `db.migration.*` / `app.ready`           | 绑定地址、数据库目标/池参数、连接验证、迁移锁等待/提交、启动耗时                                              |
+| `app.startup.failed` / `app.runtime.failed`                                    | 失败阶段、原因、监听地址和排查提示                                                                            |
+| `http.request.started` / `http.request.completed`                              | 请求上下文、实际状态/字节数、结果/原因、耗时、业务计数                                                        |
+| `http.request.panic` / `http.response.write_failed`                            | 异常堆栈、响应写入/刷新中断；已开始响应时不追加错误 JSON                                                      |
+| `groups.list.*` / `groups.save.*` / `groups.delete.*`                          | 查询范围/数量、校验拒绝、群 ID/学校/群号、保存或软删除结果；链接只记格式                                      |
+| `sites.list.*` / `sites.save.*` / `sites.delete.*`                             | DEBUG 查询/校验，INFO 已提交保存/软删除；按操作记录 site_id、站名、域名、学校/单位                            |
+| `lists.cache.hit` / `lists.cache.load` / `lists.cache.invalidated`             | DEBUG：公开 groups / sites 快照命中、重建开始、成功或结果不确定的写入后失效；查询期间失效的旧结果不会写回缓存 |
+| `traffic.cache.hit` / `traffic.snapshot.updated` / `traffic.upstream.response` | DEBUG：统计缓存复用、汇总数字更新、上游阶段与 HTTP 状态                                                       |
+| `traffic.snapshot.failed`                                                      | WARN：共享统计抓取失败，记录耗时、错误类别及退避时间，不泄露分享码和 token                                    |
+| `admin.*`                                                                      | 用户/奶群/奶站查询、概览统计及管理变更，见下方审计说明                                                        |
+| `auth.session.lookup` / `auth.write.*` / `auth.access.rejected`                | 会话缺失/命中/未知/过期/读取失败、来源与 CSRF 校验结果                                                        |
+| `auth.flow.*` / `auth.provider.*` / `auth.failed`                              | 授权流程创建与消费、QQ token/身份/资料、OIDC discovery/token/签名/nonce/userinfo/claims、明确失败阶段         |
+| `auth.profile.unavailable`                                                     | WARN：OIDC UserInfo 补充资料失败，记录固定原因和错误类别，继续使用已验证的 ID Token 登录                      |
+| `account.resolve.*` / `account.created` / `account.identity.bound`             | 匹配/锁/复用或创建/身份更新/提交或回滚；身份值不写日志                                                        |
+| `auth.login.completed` / `auth.binding.completed` / `auth.logout.*`            | 登录会话写入成功、身份绑定成功、会话撤销                                                                      |
+| `db.query.*` / `db.connection.*` / `db.pool.acquired` / `db.pool.slow`         | 语句指纹、执行耗时、连接与池等待、错误分类                                                                    |
+| `upstream.request.*` / `upstream.response.completed`                           | 登录服务 HTTP 端点、状态、网络时序、连接复用、正文读取完成/中断；保留 SDK 可能丢失的原始网络错误类型          |
+| `app.shutdown.*` / `http.shutdown.*` / `app.stopped`                           | 停止原因、等待期限、强制关闭、请求结束、数据库池释放                                                          |
 
 ## 排查方法
 
 `security.rate_limited` 为 WARN，包含 `scope`（`auth_start` / `auth_callback` / `user_write`）及 `retry_after_seconds`；限额与 `CLIENT_IP_HEADER` 配置见 README。`peer_ip` 始终是 TCP 对端，不会被转发头覆盖。启动 DEBUG 事件 `http.server.configured` 记录选用的 IP 请求头（空表示 TCP 对端）。`resources.quota.checked` 为 DEBUG，记录锁内核对的所属账号、有效 / 含历史条数及上限；达到上传配额时业务拒绝为 WARN，`reason=resource_quota_exceeded`，不视为数据库故障。
+
+排查公开列表时按 `resource` 区分奶群与奶站：正常缓存命中只出现 `lists.cache.hit`，不查会话和数据库；`lists.cache.load` 表示开始查库，不代表重建已经成功。成功写入或无法确定是否提交的写入错误都会产生 `lists.cache.invalidated`。不确定写入会让该类列表在本进程内持续按需刷新，快照从查询开始最多复用 5 秒；后续成功写入不会解除。当前日志不单独输出刷新模式或 uncertain 字段，需关联同一请求的写入结果判断，详见 [公开列表缓存](../README.md#公开列表缓存)。
 
 启动失败先找 `app.startup.failed` 的 `stage` 和 `hint`：`http_bind` 查端口占用/监听权限，`database_connect` 查目标/凭据/TLS/网络，`database_migrate` 查建表权限与迁移锁。启动未出现 `app.ready` 表示尚未就绪。
 
@@ -88,8 +97,10 @@ level=ERROR msg="服务启动失败，未进入可用状态" event=app.startup.f
 
 Docker 使用 `docker compose logs -f app`；裸跑可使用 `./nailist 2>>nailist.log`。轮转与持久化交给 Docker 日志驱动、systemd/journald 或现有采集器，应用不另设日志文件配置。
 
-不记录请求正文、Cookie、认证头、OAuth code/state/nonce/verifier、token、OpenID/UnionID/sub、SQL 参数/结果行、二维码图片或上游响应正文。密钥、URL 凭据/查询参数、嵌套敏感字段统一脱敏；群号、学校名、内部账号 ID 属于诊断业务字段，按部署方的日志权限和保留期限管理。
+不记录请求正文、Cookie、认证头、OAuth code/state/nonce/verifier、token、OpenID/UnionID/sub、SQL 参数/结果行、二维码图片或上游响应正文。密钥、URL 凭据/查询参数、嵌套敏感字段统一脱敏；群号、学校名、站名、域名、内部账号 ID 属于诊断业务字段，按部署方的日志权限和保留期限管理。
 
 ## 站点管理审计
 
-管理员身份仍由请求的 `user_id` 标识，目标账号使用 `account_id`。概览统计在 DEBUG 记录时区、统计范围、天数、各项总数与耗时（`admin.stats.started/completed`）；用户列表和管理奶群查询在 DEBUG 记录读取范围与数量；权限、输入及约束拒绝记录明确原因。解绑、删除、群信息更新和归属转移仅在数据库提交后记录 INFO，包括目标账号、群 ID、登录方式、旧/新所有者与撤销数量等相关字段。DEBUG 补充账号锁、约束检查、会话撤销、事务提交/回滚阶段。OAuth 身份标识、会话令牌、密钥及完整群链接不进入日志。
+管理员由请求的 `user_id` 标识，提交后的变更事件还显式记录 `admin_id`；目标账号使用 `account_id`。概览在 DEBUG 记录时区、统计范围、天数、总数与耗时（`admin.stats.started/completed`）；用户、奶群和奶站查询在 DEBUG 记录范围与数量。权限、输入及约束拒绝记录明确原因。
+
+解绑（`admin.identity.unbound`）、删除账号（`admin.user.deleted`）、奶群编辑（`admin.group.saved`）和奶站编辑（`admin.site.saved`）仅在提交后记录 INFO。按操作包含目标账号、group_id / site_id、登录方式、旧/新所属账号、撤销会话和删除资源数量；删除账号区分 `deleted_groups` 与 `deleted_sites`。奶站编辑还记录保存后的站名、域名和学校/单位。DEBUG 补充账号锁、约束检查、会话撤销、事务提交/回滚阶段。OAuth 身份标识、会话令牌、密钥及完整群链接不进入日志。

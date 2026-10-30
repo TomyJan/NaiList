@@ -2,8 +2,6 @@
 
 Go + PostgreSQL + React / TypeScript。深浅色模式自动跟随系统。前端内嵌在 Go 二进制中，由同一服务提供页面和 API。
 
-公开 `/api/groups`、`/api/sites` 分别使用永久内存缓存，首次读取时查库并保存 JSON 快照；并发读取合并查询。公开读取不验证登录会话，即使携带 Cookie，缓存命中时也不会查询数据库。普通增删改、管理员修改或转移归属成功后，对应缓存失效，下次读取重新查库；校验、重复、配额等确定未写入的业务拒绝不影响缓存；数据库错误（包括取消、超时和连接中断）可能发生在提交完成前或完成后，即使请求返回失败，后端也可能稍后提交。因此对应缓存立即失效，并在本进程内持续按需刷新：快照从查询开始最多复用 5 秒，过期后的首次读取重新查库，并发读取仍合并查询；后续成功写入或业务拒绝不会解除此刷新模式。未发生过不确定写入的列表仍使用永久缓存。个人和管理后台列表实时查库。缓存仅属于当前进程，多实例或直接修改数据库时需重启相关实例以重新加载；CDN 缓存仍按其配置刷新。
-
 ## 配置
 
 准备已创建数据库的 PostgreSQL 16+，将 `.env.example` 复制为工作目录下的 `.env`，填写连接串、站点地址和登录方式。Docker 和裸跑使用相同字段，进程环境变量优先于 `.env`。
@@ -72,9 +70,17 @@ location / {
 }
 ```
 
-在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时会自动建表；更新版本执行 `docker compose pull && docker compose up -d`。升级前备份外部 PostgreSQL 数据库，备份与恢复由数据库管理工具执行。
+在 QQ 互联网站应用中，将回调地址设为 `https://群列表域名/auth/qq/callback`。`PUBLIC_URL` 必须是用户访问的 HTTPS 根地址。QQ 与 OIDC 均未配置时，列表仍可浏览，但不能登录管理。启动时自动执行数据库迁移，数据库账号须具有建表、建索引等迁移权限；更新版本执行 `docker compose pull && docker compose up -d`。升级前备份外部 PostgreSQL 数据库，备份与恢复由数据库管理工具执行。
 
-代理 / CDN 部署在 `.env` 设置 `CLIENT_IP_HEADER` 为传递访客 IP 的请求头，例如 `X-Forwarded-For`、`CF-Connecting-IP` 或 `X-Real-IP`，无需配置回源网段。程序只读取指定头；`X-Forwarded-For` 取第一个 IP，其他头须为单个 IP。留空使用 TCP 对端；请求头缺失、格式错误或过长时回退 TCP 对端，无效头名配置会拒绝启动。代理应覆盖该头以传递真实访客 IP，源站应通过代理访问。上面的 Nginx 示例适用于直接面向访客；前面还有 CDN 时，须保留 CDN 提供的真实 IP 头并配置对应名称。旧配置 `TRUSTED_PROXY_CIDRS` 已移除，请替换为 `CLIENT_IP_HEADER`。
+代理 / CDN 部署在 `.env` 设置 `CLIENT_IP_HEADER` 为传递访客 IP 的请求头，例如 `X-Forwarded-For`、`CF-Connecting-IP` 或 `X-Real-IP`，无需配置回源网段。程序只读取指定头；`X-Forwarded-For` 取第一个 IP，其他头须为单个 IP。留空使用 TCP 对端；请求头缺失、格式错误或过长时回退 TCP 对端，无效头名配置会拒绝启动。代理应覆盖该头以传递真实访客 IP，源站应通过代理访问。上面的 Nginx 示例适用于直接面向访客；前面还有 CDN 时，须保留 CDN 提供的真实 IP 头并配置对应名称。
+
+## 公开列表缓存
+
+- `/api/groups`、`/api/sites` 分别保存进程内 JSON 快照，首次读取查库，并发请求合并查询。正常快照永不过期，公开读取不验证会话，携带 Cookie 的缓存命中也不查数据库；个人和后台列表实时查库。
+- 普通增删改、管理员编辑或转移归属成功后，对应缓存失效，下次公开读取重建。校验、重复、配额等确定未写入的业务拒绝不影响缓存。
+- 数据库写入报错（含取消、超时、断连）时无法确定是否已经提交，对应缓存立即失效，并在当前进程中持续进入按需刷新模式：快照从查询开始最多复用 5 秒，过期后由首次读取触发重建；后续成功写入或业务拒绝不解除此模式。未发生不确定写入的另一类列表不受影响。
+
+缓存只属于当前进程；多实例或直接改库不会跨进程失效，需重启相关实例重新加载。CDN 缓存独立，更新延迟取决于其配置。
 
 ## 请求与上传限制
 
@@ -104,7 +110,7 @@ chmod +x nailist
 在 `.env` 中设置 `LOG_LEVEL=info`（默认），支持 `debug`、`info`、`warn`、`error`，修改后重启生效：
 
 - **DEBUG**：请求开始、会话命中/失效、表单与 CSRF 校验、数据库连接池/语句指纹/影响行数、QQ/OIDC 每阶段及上游 DNS/TCP/TLS 时序、身份匹配/事务分支、静态资源和健康检查。
-- **INFO**：启动配置与数据库目标、服务就绪、普通 API 请求结果、已提交的奶群/账号变更、登录/绑定/退出、客户端取消及正常停机。普通 404 保留请求汇总。
+- **INFO**：启动配置与数据库目标、服务就绪、普通 API 请求结果、已提交的奶群/奶站/账号变更、登录/绑定/退出、客户端取消及正常停机。普通 404 保留请求汇总。
 - **WARN**：输入/权限/身份校验拒绝、超时、慢请求/慢数据库/慢上游、响应中断、辅助清理失败。内部错误已记录 ERROR 时，请求汇总为 WARN，避免重复报错。
 - **ERROR**：启动失败、未恢复的数据库/上游/内部故障、panic（含堆栈）及异常退出；错误由负责最终处理的一层记录。
 
@@ -135,12 +141,13 @@ node scripts/build.mjs -o nailist
 docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t nailist:local .
 ```
 
-访问 `PUBLIC_URL`。前端开发模式：后端设置 `PUBLIC_URL=http://localhost:5173`，在 `web` 目录运行 `pnpm run dev`，API 会代理到 `localhost:8080`；QQ 回调也须使用 5173 地址。
+访问 `PUBLIC_URL`。前端开发模式：后端设置 `PORT=8080`、`PUBLIC_URL=http://127.0.0.1:5173`，在 `web` 目录运行 `pnpm run dev` 并访问该地址，API 会代理到 `localhost:8080`。登录回调须与浏览器访问地址一致；QQ 应用还需允许该开发回调。完整验证命令和测试环境见 [开发与验证](docs/development.md)。
 
 ## 功能与验证
 
 首页提供「奶群列表 / 奶站列表」Tab，切换不改变地址，浏览器标题采用「页面名 - NaiList」。两个列表完整加载，每次加载后在客户端随机排序，兼容 API/CDN 缓存；搜索、复制和 Tab 切换保持已加载列表顺序。搜索栏右侧可刷新列表，重新请求数据并随机排序，保留搜索词。奶群搜索学校/单位、群号及隐藏关键词，支持复制群号和直达加群。「管理奶表」顶部保留账号绑定，下方按 Tab 添加、编辑、删除自己的奶群或奶站；管理列表仍按更新时间倒序。群号全站唯一。
 导航栏喇叭按钮会在页面空闲后后台加载音频索引和音频缓存；点击后随机播放一段，音量固定为 36%，不会自动播放或叠加播放。音频来自固定 CDN，索引加载或播放失败时通过底部 Toast 提示，不影响其他页面功能。
+图像、字体、音频和二维码组件的来源见 [素材说明](web/ASSETS.md)。
 
 奶群和奶站的添加、编辑弹窗自动保留当前标签页的草稿，关闭、取消或刷新后可恢复；草稿按账号、资源类型和个人 / 管理员作用域隔离，成功保存、删除、退出或检测到登录失效后清理。「撤销」将添加表单清空，或将编辑表单恢复到打开时的原值，操作不会写入服务器。
 
@@ -148,7 +155,7 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 前后端均校验：学校/单位必填且最多 32 字，关键词最多 128 字（包含分隔符），群号为 5～11 位数字。群链接支持 `https://qm.qq.com/q/` 加有效短码，以及带查询参数的旧版 `https://qun.qq.com/universal-share/share?…` 链接，最多 2048 字符；粘贴、二维码识别和保存均完整保留原链接参数。文字长度按 Unicode 字符计算，支持表情。
 
-奶站必填站点名称、学校/单位和域名，站名及单位分别最多 32 个 Unicode 字符。域名全站唯一，支持 `甘肃奶龙大学.com` 等中文域名，前后端统一转为小写 Punycode 后校验和保存，跳转也使用 Punycode；列表、编辑框和删除确认显示中文。中文与其 Punycode 写法视为同一域名，添加或编辑冲突时提示「此域名已存在, 请前往首页搜索查看」，由后端及数据库唯一索引保证。标准 DNS 格式限制：转换后标签最多 63 字符、总长最多 253 字符，后缀为至少两位英文字母；不接受 IP、端口、凭据或路径。输入框外固定显示 `https://`；粘贴完整网址或结束输入时自动删除协议、`www.`、路径及查询片段，访问固定使用 HTTPS。域名框下提示添加本站友链。奶站搜索匹配站名、学校/单位及域名，支持中文与 Punycode 两种写法。
+奶站必填站点名称、学校/单位和域名，站名及单位分别最多 32 个 Unicode 字符。域名全站唯一，支持 `甘肃奶龙大学.com`、`兰理.中国` 等中文域名，前后端统一转为小写 Punycode 后校验和保存，跳转也使用 Punycode；列表、编辑框和删除确认显示中文。中文与其 Punycode 写法视为同一域名，添加或编辑冲突时提示「此域名已存在, 请前往首页搜索查看」，由后端及数据库唯一索引保证。标准 DNS 格式限制：转换后标签最多 63 字符、总长最多 253 字符，后缀接受至少两位英文字母或有效的国际化域名标签（如 `.中国`）；不接受 IP、端口、凭据或路径。输入框外固定显示 `https://`；粘贴完整网址或结束输入时自动删除协议、`www.`、路径及查询片段，访问固定使用 HTTPS。域名框下提示添加本站友链。奶站搜索匹配站名、学校/单位及域名，支持中文与 Punycode 两种写法。
 
 首页页脚提供项目与反馈支持入口。奶群和奶站添加、编辑成功后提醒首页信息可能需一分钟更新。CDN 可分别缓存公开 GET `/api/groups` 和 `/api/sites`；登录、个人、管理和所有写入接口请勿缓存。
 
@@ -158,25 +165,17 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 弹窗、头像菜单、页面与 Tab 使用统一轻量动效，刷新图标随请求旋转；自动遵循系统「减少动态效果」设置。关闭动画期间禁止重复交互，结束后恢复焦点，草稿与保存规则保持一致。
 
-```sh
-go test ./...
-go vet ./...
-cd web && pnpm test && pnpm run build
-```
-
-数据库集成测试可设置专用测试库 `TEST_DATABASE_URL` 后运行 `go test ./internal/server -run TestPostgres -v`。浏览器测试需运行服务并安装 Chrome，设置 `TEST_APP_URL=http://localhost:8080` 后，在 `web` 目录执行 `pnpm run test:e2e`。
-
-浏览器测试包含彩色圆点二维码回归用例。设置测试变量 `QQ_QR_SAMPLE` 为本地 QQ 原图路径，可额外运行实图用例（预期链接 `https://qm.qq.com/q/lnNAZvuNKS`）；原图无需提交到仓库。
+单元、数据库集成、版本脚本和深浅色浏览器验证的准备及命令见 [开发与验证](docs/development.md)。
 
 ## 自动检查与发版
 
-Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-X.Y.Z-短hash-linux-amd64`（标签提交省略 hash），前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
+Dependabot 自动更新前端依赖及 pnpm 锁文件、Go 依赖、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-X.Y.Z-短hash-linux-amd64`（标签提交省略 hash），前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
 
-发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；无标签时从 `web/package.json` 的 `0.1.0` 起算，首次默认发 `v0.1.1`。工作流同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，并原子推送默认分支与同名标签；主分支保护规则需允许工作流推送。随后检查、二进制和镜像均使用该发布提交。若默认分支在操作期间更新，推送会失败，需重新触发。
+发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；没有稳定标签时，从 `web/package.json` 的当前版本递增。工作流同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，并原子推送默认分支与同名标签；主分支保护规则需允许工作流推送。随后检查、二进制和镜像均使用该发布提交。若默认分支在操作期间更新，推送会失败，需重新触发。
 
 检查全部通过后，发布 Linux x64 裸二进制 `nailist-X.Y.Z-linux-amd64` 及 `SHA256SUMS.txt`，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外 Secret。仓库/组织需允许 Actions 及 `packages: write` 权限；镜像公开下载需将 GHCR 包设为公开。可通过 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
 
-发布任务需要 `contents: write`（工作流已配置）。Release 仅使用准备阶段已推送且指向发布提交的标签，避免发布时临时给旧提交创建标签触发权限限制。若旧版本工作流报 403，推送最新代码后重新 **Run workflow**；旧运行的 **Re-run jobs** 仍使用旧工作流。
+发布任务需要 `contents: write`（工作流已配置）。Release 仅使用准备阶段已推送且指向发布提交的标签。修改工作流后应重新 **Run workflow**；**Re-run jobs** 仍使用原运行的工作流版本。
 
 后端版本可执行 `./nailist --version` 查看，同一编译版本注入页脚和 `<html data-version="X.Y.Z[-短hash]">`。
 
@@ -186,7 +185,7 @@ Dependabot 自动更新 pnpm、Go、Docker 和 GitHub Actions。推送到 `maste
 
 QQ 配置 `QQ_APP_ID`、`QQ_APP_KEY`，回调为 `/auth/qq/callback`。`QQ_USE_UNIONID=false` 默认使用应用内 OpenID；设为 `true` 会请求并使用 UnionID，需要 QQ 互联应用具有相应权限，未返回 UnionID 时拒绝登录。启用时先用原 QQ 应用登录一次，系统会补充 UnionID 并保留原账号；更换 App ID 前须完成此步骤。已保存的 UnionID 不会被配置切换删除。
 
-OIDC 示例（省略则不启用）：
+OIDC 示例（整组配置全部留空才不启用；填写任一项后须补齐 ID、名称、Issuer 和客户端 ID）：
 
 ```env
 OIDC_ID=campus
@@ -200,9 +199,9 @@ OIDC_SCOPES=
 
 `OIDC_ID` 是稳定的小写登录方式标识，不能为 `qq`；客户端 ID 是独立的 `OIDC_CLIENT_ID`。名称必填，图标可选（HTTPS URL 或站内路径）。Issuer 需为 HTTPS，支持标准 OIDC discovery、授权码模式及 PKCE S256；注册精确回调 `https://群列表域名/auth/campus/callback`（campus 替换为实际 ID）。密钥对公开客户端可留空，默认请求 `openid profile`，额外 scope 用空格分隔。验证 ID Token 签名、issuer、audience、过期时间和 nonce，使用 issuer + sub 识别身份，密钥和 token 不返回前端。
 
-`profile` 已包含标准头像字段 `picture`，无需额外的头像 scope；登录服务仍需允许向该客户端提供此字段。ID Token 缺少昵称或有效头像时，会从 discovery 声明的 HTTPS UserInfo 接口补充，并核对 `sub` 与 ID Token 一致。头像仅接受不含用户名/密码的 HTTPS 地址；UserInfo 不可用时保留 ID Token 登录，身份不一致则拒绝登录。升级后退出并通过 OIDC 重新登录，可更新已保存的账号头像。若仍无头像，启用 DEBUG 查看 `userinfo` / `claims` 阶段的 `picture_present`、`avatar_accepted`；请求失败会产生 `auth.profile.unavailable` 警告。
+`profile` 已包含标准头像字段 `picture`，无需额外的头像 scope；登录服务仍需允许向该客户端提供此字段。ID Token 缺少昵称或有效头像时，会从 discovery 声明的 HTTPS UserInfo 接口补充，并核对 `sub` 与 ID Token 一致。头像仅接受不含用户名/密码的 HTTPS 地址；UserInfo 不可用时保留 ID Token 登录，身份不一致则拒绝登录。退出并通过 OIDC 重新登录可更新账号头像。若仍无头像，启用 DEBUG 查看 `userinfo` / `claims` 阶段的 `picture_present`、`avatar_accepted`；请求失败会产生 `auth.profile.unavailable` 警告。
 
-部署升级自动将旧 QQ 账号迁移到身份表，保留账号 ID、群归属和现有会话。首次登录原 QQ 应用会补齐身份所属应用。已有绑定后不要改 OIDC_ID / OIDC_ISSUER；显示名称和图标可调整。迁移前备份数据库。
+已有绑定后不要改 `OIDC_ID` / `OIDC_ISSUER`，否则原身份无法匹配；显示名称和图标可调整。
 
 ## 站点管理
 
@@ -217,9 +216,6 @@ ADMIN_USER_IDS=1,2
 - **概览**：显示用户数、有效奶群数、有效奶站数、上传用户数和学校/单位数；提供近 7/30 天用户、奶群和奶站的每日新增趋势，可刷新统计。按北京时间统计现存用户与有效记录，已删除数据不计入；上传用户和学校/单位跨两类列表去重。
 - **用户管理**：完整列出用户 ID、昵称、有效奶群 / 奶站数量及 QQ/OIDC 绑定资料，可搜索、解除指定绑定或删除用户。至少保留一种登录方式；解绑会使该用户的全部会话和待完成绑定失效，需重新登录。不能删除当前自己的账号。
 - **奶群管理**：完整列出有效奶群的学校/单位、关键词、群号、链接和所属账号，可搜索、修改四项信息及转移归属。编辑复用校验、二维码解析、撤销和草稿，管理员草稿与个人草稿隔离；四项信息和归属一次保存。
-
 - **奶站管理**（`/admin/sites`）：完整列出站名、学校/单位、HTTPS 域名链接和所属账号，可编辑三项信息并转移归属；复用校验、草稿与撤销。
 
-删除用户前，须先把其所有有效奶群和奶站转移给其他用户；删除会清理该账号、绑定、会话、待完成绑定流程及历史软删除的奶群和奶站。解除绑定后，该身份再次登录可创建新的独立账号，不会继承旧账号的奶表。变更结果与首页 CDN 缓存最多可能相差一分钟。
-
-升级自动创建奶站表和索引，不需要新增环境变量；保留原用户、绑定及奶群数据。升级前备份数据库，数据库账号须具有建表权限。
+删除用户前，须先把其所有有效奶群和奶站转移给其他用户；删除会清理该账号、绑定、会话、待完成绑定流程及历史软删除的奶群和奶站。解除绑定后，该身份再次登录可创建新的独立账号，不会继承旧账号的奶表。首页更新时间取决于 CDN 缓存配置，应用成功提示按约一分钟提醒，不代表服务端保证的最长延迟。
