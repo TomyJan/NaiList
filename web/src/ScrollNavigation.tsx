@@ -12,6 +12,7 @@ export function ScrollNavigation({
 }) {
   const navRef = useRef<HTMLElement>(null);
   const returningToTop = useRef(false);
+  const visible = useRef(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useLayoutEffect(() => {
@@ -30,20 +31,44 @@ export function ScrollNavigation({
     let upwardDistance = 0;
     let height = nav.offsetHeight;
     let frame = 0;
-    let visible = false;
+    visible.current = false;
     returningToTop.current = false;
     setShowBackToTop(false);
     nav.style.setProperty("--nav-offset", "0px");
 
     const setVisible = (next: boolean) => {
-      if (next === visible) return;
-      visible = next;
+      if (next === visible.current) return;
+      visible.current = next;
       setShowBackToTop(next);
     };
     const reveal = () => {
       if (!document.activeElement?.matches(":focus-visible")) return;
       offset = 0;
       nav.style.setProperty("--nav-offset", "0px");
+    };
+    const finishReturn = () => {
+      returningToTop.current = false;
+    };
+    const interruptReturn = () => {
+      if (!returningToTop.current) return;
+      finishReturn();
+      // Stop the automatic motion before the user's own scroll takes over.
+      window.scrollTo({ top: window.scrollY, behavior: "instant" });
+    };
+    const keyScroll = (event: KeyboardEvent) => {
+      if (
+        !event.defaultPrevented &&
+        [
+          "ArrowUp",
+          "ArrowDown",
+          "PageUp",
+          "PageDown",
+          "Home",
+          "End",
+          " ",
+        ].includes(event.key)
+      )
+        interruptReturn();
     };
     const update = () => {
       frame = 0;
@@ -62,7 +87,7 @@ export function ScrollNavigation({
           : Math.max(0, Math.min(height, offset + delta));
       nav.style.setProperty("--nav-offset", `${-offset}px`);
 
-      if (delta > 0) returningToTop.current = false;
+      if (delta > 0 || y === 0) finishReturn();
       if (y <= Math.max(320, innerHeight) || pinned || returningToTop.current) {
         upwardDistance = 0;
         setVisible(false);
@@ -85,6 +110,10 @@ export function ScrollNavigation({
     resize.observe(nav);
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
+    window.addEventListener("scrollend", finishReturn);
+    window.addEventListener("wheel", interruptReturn, { passive: true });
+    window.addEventListener("touchstart", interruptReturn, { passive: true });
+    window.addEventListener("keydown", keyScroll);
     motion.addEventListener("change", schedule);
     // Keyboard navigation must never focus a control outside the viewport.
     nav.addEventListener("focusin", reveal);
@@ -93,6 +122,10 @@ export function ScrollNavigation({
       resize.disconnect();
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
+      window.removeEventListener("scrollend", finishReturn);
+      window.removeEventListener("wheel", interruptReturn);
+      window.removeEventListener("touchstart", interruptReturn);
+      window.removeEventListener("keydown", keyScroll);
       motion.removeEventListener("change", schedule);
       nav.removeEventListener("focusin", reveal);
     };
@@ -113,6 +146,7 @@ export function ScrollNavigation({
         inert={!showBackToTop}
         onClick={() => {
           returningToTop.current = true;
+          visible.current = false;
           setShowBackToTop(false);
           window.scrollTo({
             top: 0,

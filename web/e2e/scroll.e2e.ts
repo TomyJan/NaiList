@@ -94,6 +94,38 @@ test("回顶按钮只在滚过一屏后上滑时显示，下滑和回顶后隐�
   await expect.poll(() => navOffset(page)).toBeCloseTo(0, 0);
 });
 
+test("PageUp 中断回顶后继续上滑可重新显示按钮", async ({ page }) => {
+  await setup(page);
+  await scroll(page, 3200);
+  await scroll(page, 3150);
+  const button = page.getByRole("button", { name: "回到顶部", exact: true });
+  await expect(button).toBeVisible();
+  await button.click();
+  await page.keyboard.press("PageUp");
+  // The real keyboard action interrupts the browser's smooth return.
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeLessThan(3000);
+  await expect(button).toBeVisible();
+  // A second gesture must start after the first native PageUp has settled.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const y = window.scrollY;
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return window.scrollY === y;
+      }),
+    )
+    .toBe(true);
+  const interruptedY = await page.evaluate(() => window.scrollY);
+  expect(interruptedY).toBeGreaterThan(1000);
+  await page.keyboard.press("PageUp");
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeLessThan(interruptedY - 12);
+  await expect(button).toBeVisible();
+});
+
 test("窄屏回顶按钮避开 Cookie 提示，减少动态效果时立即回顶", async ({
   page,
 }) => {
