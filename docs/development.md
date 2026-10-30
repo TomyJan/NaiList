@@ -83,4 +83,4 @@ Linux 安装浏览器及系统依赖可用 `pnpm exec playwright install --with-
 
 彩色圆点二维码自带回归素材；可额外将 `QQ_QR_SAMPLE` 设为本地 QQ 原图路径，验证预期链接 `https://qm.qq.com/q/lnNAZvuNKS`，未设置时仅跳过该可选用例。原图无需提交。
 
-CI 配置见 [.github/workflows/code-check.yml](../.github/workflows/code-check.yml)，包含格式、类型、测试、依赖安全检查、二进制与镜像构建；发版行为见 [自动检查与发版](../README.md#自动检查与发版)。
+日常 CI 见 [.github/workflows/code-check.yml](../.github/workflows/code-check.yml)，包含格式、类型、测试、依赖安全检查、二进制与镜像构建。[Prepare Release](../.github/workflows/release-prepare.yml) 手动准备提交和标签，[Release](../.github/workflows/release.yml) 响应标签推送，独立验证、构建并发布，不嵌套调用其他工作流。配置 `RELEASE_TOKEN` 及发版步骤见 [自动检查与发版](../README.md#自动检查与发版)。

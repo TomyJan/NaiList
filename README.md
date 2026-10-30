@@ -169,13 +169,17 @@ docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t na
 
 ## 自动检查与发版
 
-Dependabot 自动更新前端依赖及 pnpm 锁文件、Go 依赖、Docker 和 GitHub Actions。推送到 `master`/`main` 或提交 PR 时，自动运行格式、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。**Build and Check** 的 Artifacts 提供 Linux x64 裸二进制 `nailist-X.Y.Z-短hash-linux-amd64`（标签提交省略 hash），前端已内嵌，保留 7 天；上传不添加 ZIP 或 tar.gz 包装。普通 Build 只检查 Docker 构建，不推送镜像。
+Dependabot 自动更新前端依赖及 pnpm 锁文件、Go 依赖、Docker 和 GitHub Actions。三个工作流分别处理日常检查、发版准备和标签发布，不使用 `workflow_call` 或直接派发另一个工作流：
 
-发版在 GitHub **Actions → Release → Run workflow** 手动触发，选择默认分支和 `patch`（默认）、`minor` 或 `major`。版本基于最高稳定 `vX.Y.Z` 标签递增；没有稳定标签时，从 `web/package.json` 的当前版本递增。工作流同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，并原子推送默认分支与同名标签；主分支保护规则需允许工作流推送。随后检查、二进制和镜像均使用该发布提交。若默认分支在操作期间更新，推送会失败，需重新触发。
+- **Build and Check**（`code-check.yml`）：推送到 `master`/`main`、提交 PR 或手动运行时执行格式、版本一致性、类型、单元/数据库/深浅色浏览器检查，并构建前端、后端和 Docker 镜像。Artifacts 提供 Linux x64 裸二进制 `nailist-X.Y.Z-短hash-linux-amd64`（精确版本标签提交省略 hash），前端已内嵌，保留 7 天；不添加 ZIP 或 tar.gz 包装，不推送镜像。
+- **Prepare Release**（`release-prepare.yml`）：手动选择默认分支及 `patch`（默认）、`minor` 或 `major`。基于最高稳定 `vX.Y.Z` 标签递增；没有稳定标签时，从 `web/package.json` 当前版本递增。同步更新 `web/package.json`、`web/src/version.ts` 和 `cmd/server/version.go`，以 `chore: release vX.Y.Z` 提交，原子推送默认分支和标签。默认分支在准备期间发生变化时拒绝推送，需重新运行。
+- **Release**（`release.yml`）：由 `v*` 标签推送事件触发，仅接受版本与源码一致的稳定 `vX.Y.Z` 标签。独立检查并构建该标签的确切提交，检查通过后推送 GHCR 镜像，再发布裸二进制及校验文件。失败时在该标签对应的 Release 运行中重试，无需重新 bump 版本。
 
-检查全部通过后，发布 Linux x64 裸二进制 `nailist-X.Y.Z-linux-amd64` 及 `SHA256SUMS.txt`，并推送 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外 Secret。仓库/组织需允许 Actions 及 `packages: write` 权限；镜像公开下载需将 GHCR 包设为公开。可通过 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流仅在手动触发后创建标签和 Release，不会自动部署服务器。
+首次使用前，在 **Settings → Secrets and variables → Actions** 添加仓库 Secret `RELEASE_TOKEN`：使用可访问此仓库的细粒度个人访问令牌，至少授予 **Contents: Read and write**，主分支保护规则也需允许该凭据推送。Prepare Release 使用它推送提交与标签；内置 `GITHUB_TOKEN` 的推送不会触发后续标签工作流，缺少 Secret 时准备阶段会明确报错。创建令牌及填写 Secret 需由仓库维护者完成，切勿写入 `.env` 或提交到代码。
 
-发布任务需要 `contents: write`（工作流已配置）。Release 仅使用准备阶段已推送且指向发布提交的标签。修改工作流后应重新 **Run workflow**；**Re-run jobs** 仍使用原运行的工作流版本。
+发布产物为 Linux x64 裸二进制 `nailist-X.Y.Z-linux-amd64`、`SHA256SUMS.txt`，以及 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:latest` 的 Linux x64 镜像。镜像仓库路径自动使用当前 GitHub 仓库的小写名称，发布镜像使用内置 `GITHUB_TOKEN` 登录，无需 Docker Hub 账号或额外的镜像仓库凭据。仓库/组织需允许 Actions 及 `packages: write`；镜像公开下载需将 GHCR 包设为公开。可以 `docker pull ghcr.io/<owner>/<repo>:vX.Y.Z` 获取镜像。工作流不会自动部署服务器；手动推送稳定版本标签同样会触发 Release。
+
+发布 GitHub Release 的任务需要 `contents: write`（工作流已配置）。发布前会再次核对远端标签仍指向经过验证的提交。**Re-run jobs** 使用原运行的工作流版本；修订工作流后需通过新的标签推送事件使用新流程。
 
 后端版本可执行 `./nailist --version` 查看，同一编译版本注入页脚和 `<html data-version="X.Y.Z[-短hash]">`。
 

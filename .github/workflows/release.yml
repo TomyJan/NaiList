@@ -1,14 +1,9 @@
 name: Release
+run-name: Release ${{ github.ref_name }}
 
 on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: Version bump
-        type: choice
-        required: false
-        default: patch
-        options: [patch, minor, major]
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -19,63 +14,254 @@ concurrency:
 
 jobs:
   prepare:
-    name: Commit and tag release version
+    name: Validate release tag and source version
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      image: ${{ steps.version.outputs.image }}
       sha: ${{ steps.version.outputs.sha }}
+      image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Require the default branch and calculate version
+      - name: Verify stable tag, event commit and synchronized versions
         id: version
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          BUMP: ${{ inputs.bump || 'patch' }}
         shell: bash
         run: |
-          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
-            echo 'Release must run on the default branch.' >&2
+          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Release requires a stable vX.Y.Z tag.' >&2
             exit 1
           fi
-          git fetch origin "$DEFAULT_BRANCH" --tags
-          if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$DEFAULT_BRANCH")" ]; then
-            echo 'Default branch changed; start a new release run.' >&2
+          tag=${GITHUB_REF#refs/tags/}
+          sha=$(git rev-parse "$GITHUB_REF^{commit}")
+          if [ "$sha" != "$GITHUB_SHA" ] || [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo 'Release tag does not match the event commit.' >&2
             exit 1
           fi
-          version=$(node scripts/release-version.mjs "$BUMP")
-          node scripts/set-release-version.mjs "$version"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add web/package.json web/src/version.ts cmd/server/version.go
-          git commit -m "chore: release v$version"
-          git tag "v$version"
-          git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/v$version"
-          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          printf 'version=%s\ntag=v%s\nimage=ghcr.io/%s\n' "$version" "$version" "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          version=${tag#v}
+          node scripts/set-release-version.mjs --check "$version"
+          printf 'version=%s\ntag=%s\nsha=%s\nimage=ghcr.io/%s\n' "$version" "$tag" "$sha" "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-  checks:
-    name: Validate release source
+  frontend:
+    name: TypeScript checks, tests and build
     needs: prepare
-    uses: ./.github/workflows/code-check.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      ref: ${{ needs.prepare.outputs.sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level=high --registry=https://registry.npmjs.org
+      - name: Format and typecheck
+        run: |
+          pnpm exec prettier --check src e2e '*.ts' package.json tsconfig.json index.html
+          pnpm exec tsc --noEmit
+      - name: Verify synchronized application versions
+        run: node ../scripts/set-release-version.mjs --check "$(node -p 'require("./package.json").version')"
+      - name: Release version tests
+        run: node --test ../scripts/*.test.mjs
+      - run: pnpm test
+      - run: pnpm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7
+
+  backend:
+    name: Go checks and PostgreSQL tests
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nailist
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: nailist
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nailist -d nailist"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://nailist:ci-test-password@localhost:5432/nailist?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Format and vet
+        run: |
+          test -z "$(gofmt -l cmd internal migrations web/assets.go)"
+          go vet ./...
+      - name: Workflow syntax
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml
+      - name: Tests including database integration
+        run: go test -race -count=1 ./...
+      - name: Reachable Go vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Build backend
+        run: go build ./cmd/server
+
+  e2e:
+    name: Light and dark browser tests
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nailist
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: nailist
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nailist -d nailist"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://nailist:ci-test-password@localhost:5432/nailist?sslmode=disable
+      PUBLIC_URL: http://127.0.0.1:8080
+      PORT: "8080"
+      TEST_APP_URL: http://127.0.0.1:8080
+      UMAMI_SCRIPT_URL: http://umami.test/script.js
+      UMAMI_WEBSITE_ID: 00000000-0000-0000-0000-000000000001
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: pnpm exec playwright install --with-deps chrome
+        working-directory: web
+      - name: Start backend and run browser tests
+        timeout-minutes: 17
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/nailist" ./cmd/server
+          "$RUNNER_TEMP/nailist" > server.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --connect-timeout 2 --max-time 3 "$PUBLIC_URL/api/health" > /dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then cat server.log; exit 1; fi
+          pnpm --dir web run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: ${{ failure() || cancelled() }}
+        with:
+          name: browser-test-results
+          path: |
+            web/test-results
+            server.log
+          retention-days: 7
+
+  binaries:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: [prepare, backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux]
+        goarch: [amd64]
+        # 恢复其他平台时使用以下矩阵：
+        # goos: [linux, darwin, windows]
+        # goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Build standalone application
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          mkdir -p dist
+          VERSION=$(node scripts/build-version.mjs)
+          if [ -n "$RELEASE_VERSION" ] && [ "$VERSION" != "$RELEASE_VERSION" ]; then
+            echo 'Compiled version does not match release version.' >&2
+            exit 1
+          fi
+          binary="nailist-$VERSION-$GOOS-$GOARCH"
+          if [ "$GOOS" = windows ]; then binary="$binary.exe"; fi
+          node scripts/build.mjs -o "dist/$binary"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/nailist-*
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
 
   image:
     name: Publish release image
-    needs: [prepare, checks]
+    needs: [prepare, backend, e2e, binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -86,7 +272,11 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ needs.prepare.outputs.sha }}
-      - uses: docker/setup-qemu-action@v4
+      - name: Validate deployment configuration
+        env:
+          DATABASE_URL: postgres://nailist:ci-test-password@postgres.example.com:5432/nailist?sslmode=verify-full
+          PUBLIC_URL: https://groups.example.com
+        run: docker compose config --quiet
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -113,7 +303,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [prepare, checks, image]
+    needs: [prepare, binaries, image]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -129,18 +319,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
         shell: bash
         run: |
-          sha256sum nailist-* > SHA256SUMS.txt
-          existing_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          binary="nailist-$RELEASE_VERSION-linux-amd64"
+          test -s "$binary"
+          sha256sum "$binary" > SHA256SUMS.txt
+          existing_sha=$(gh api "repos/$GH_REPO/commits/refs/tags/$RELEASE_TAG" --jq '.sha')
           if [ "$existing_sha" != "$RELEASE_SHA" ]; then
             echo 'Release tag does not point to the prepared commit.' >&2
             exit 1
           fi
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" ./* --clobber
+            gh release upload "$RELEASE_TAG" "$binary" SHA256SUMS.txt --clobber
           else
-            gh release create "$RELEASE_TAG" ./* --verify-tag --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes --latest
+            gh release create "$RELEASE_TAG" "$binary" SHA256SUMS.txt --verify-tag --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes --latest
           fi

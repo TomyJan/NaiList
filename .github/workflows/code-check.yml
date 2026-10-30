@@ -2,18 +2,6 @@ name: Build and Check
 
 on:
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      version:
-        description: Expected release version; otherwise derived from Git
-        type: string
-        required: false
-        default: ""
-      ref:
-        description: Commit to build and test
-        type: string
-        required: false
-        default: ""
   push:
     branches: [master, main]
   pull_request:
@@ -48,7 +36,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -81,7 +69,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/package.json
@@ -97,6 +85,8 @@ jobs:
         run: |
           pnpm exec prettier --check src e2e '*.ts' package.json tsconfig.json index.html
           pnpm exec tsc --noEmit
+      - name: Verify synchronized application versions
+        run: node ../scripts/set-release-version.mjs --check "$(node -p 'require("./package.json").version')"
       - name: Release version tests
         run: node --test ../scripts/*.test.mjs
       - run: pnpm test
@@ -134,7 +124,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -197,7 +187,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -214,15 +204,10 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
-          RELEASE_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           mkdir -p dist
           VERSION=$(node scripts/build-version.mjs)
-          if [ -n "$RELEASE_VERSION" ] && [ "$VERSION" != "$RELEASE_VERSION" ]; then
-            echo 'Compiled version does not match release version.' >&2
-            exit 1
-          fi
           binary="nailist-$VERSION-$GOOS-$GOARCH"
           if [ "$GOOS" = windows ]; then binary="$binary.exe"; fi
           node scripts/build.mjs -o "dist/$binary"
@@ -243,7 +228,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
