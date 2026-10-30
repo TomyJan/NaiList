@@ -8,6 +8,9 @@
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
   --cookie-notice-space: 0px;
+  --shadow-floating: 0 0 18px #352c161f, 0 12px 32px #352c1629;
+  --shadow-modal: 0 0 32px #2e26132e, 0 24px 80px #2e261345;
+  --overlay-backdrop: #2b24185c;
 }
 
 * {
@@ -194,7 +197,7 @@ p {
   border-radius: 50%;
   color: #8a6500;
   background: #fff;
-  box-shadow: 0 4px 18px #352c161a;
+  box-shadow: var(--shadow-floating);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -215,6 +218,11 @@ p {
   border-color: #c6aa51;
 }
 @media (prefers-color-scheme: dark) {
+  :root {
+    --shadow-floating: 0 0 0 1px #ffffff0a, 0 0 22px #0006, 0 14px 40px #0008;
+    --shadow-modal: 0 0 0 1px #ffffff0a, 0 0 36px #0008, 0 28px 96px #000a;
+    --overlay-backdrop: #080705b3;
+  }
   .back-to-top {
     color: #e8d9a0;
     background: #26231b;
@@ -324,7 +332,7 @@ p {
   background: #fff;
   border: 1px solid #ebe7df;
   border-radius: 13px;
-  box-shadow: 0 12px 35px #7a5c001c;
+  box-shadow: var(--shadow-floating);
 }
 .nickname {
   display: block;
@@ -761,10 +769,11 @@ h1 {
   max-height: calc(100dvh - 32px);
   overflow: auto;
   color: #3c3525;
-  box-shadow: 0 25px 100px #2e261333;
+  background: #fff;
+  box-shadow: var(--shadow-modal);
 }
 .modal::backdrop {
-  background: #3b301555;
+  background: var(--overlay-backdrop);
   backdrop-filter: blur(3px);
 }
 .modal-head {
@@ -1073,7 +1082,6 @@ h1 {
   .account-menu {
     background: #29251d;
     border-color: #4e483a;
-    box-shadow: 0 12px 35px #0005;
   }
   .account-menu button {
     color: #e2ddd1;
@@ -1183,10 +1191,6 @@ h1 {
     color: #ece9e3;
     background: #28241c;
     border-color: #595241;
-    box-shadow: 0 25px 100px #0008;
-  }
-  .modal::backdrop {
-    background: #0c0a05aa;
   }
   .modal input {
     background: #201d15;
@@ -1407,7 +1411,7 @@ h1 {
   border-radius: 18px;
   background: #fffdf7;
   color: #3c3525;
-  box-shadow: 0 10px 40px #352c1626;
+  box-shadow: var(--shadow-floating);
 }
 .cookie-notice > svg {
   flex-shrink: 0;
@@ -1478,7 +1482,6 @@ body > .toast-host .app-toasts.Toastify__toast-container {
     background: #2c281f;
     color: #eee9dc;
     border-color: #514938;
-    box-shadow: 0 10px 40px #0005;
   }
 }
 @media (max-width: 700px) {
@@ -1529,7 +1532,7 @@ body > .toast-host .app-toasts.Toastify__toast-container {
   border-radius: 14px;
   background: #fff;
   color: #3c3525;
-  box-shadow: 0 8px 28px #352c161a;
+  box-shadow: var(--shadow-floating);
   font-size: 13px;
   line-height: 1.65;
   pointer-events: none;
@@ -1605,7 +1608,6 @@ body > .toast-host .app-toasts.Toastify__toast-container {
     background: #312d22;
     color: #ece9e3;
     border-color: #595241;
-    box-shadow: 0 8px 28px #0005;
   }
   .toast-close {
     color: #c0baab;
