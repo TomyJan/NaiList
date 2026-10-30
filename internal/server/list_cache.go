@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"time"
 
 	"nailist/internal/admin"
 	"nailist/internal/groups"
@@ -14,7 +15,8 @@ import (
 	"nailist/internal/sites"
 )
 
-// Public snapshots are immutable, encoded once, and valid until a possible write.
+// Public snapshots are immutable and encoded once. An unknown write outcome
+// permanently enables bounded refreshes: that transaction may commit much later.
 // A generation prevents an in-flight query from restoring invalidated data.
 type listSnapshot struct {
 	body  []byte
@@ -27,7 +29,11 @@ type listCache struct {
 	valid      bool
 	snapshot   listSnapshot
 	flight     chan struct{}
+	uncertain  bool
+	expiresAt  time.Time
 }
+
+const uncertainListMaxAge = 5 * time.Second
 
 func encodeList[T any](rows []T, err error) (listSnapshot, error) {
 	if err != nil {
@@ -49,7 +55,7 @@ func (c *listCache) get(ctx context.Context, resource string, load func(context.
 			return listSnapshot{}, err
 		}
 		c.mu.Lock()
-		if c.valid {
+		if c.valid && (!c.uncertain || time.Now().Before(c.expiresAt)) {
 			snapshot := c.snapshot
 			c.mu.Unlock()
 			logging.FromContext(ctx).DebugContext(ctx, "公开列表命中内存缓存，无需查询数据库或重新编码", "component", "cache", "event", "lists.cache.hit", "resource", resource, "count", snapshot.count)
@@ -66,13 +72,15 @@ func (c *listCache) get(ctx context.Context, resource string, load func(context.
 			}
 		}
 		generation := c.generation
+		started := time.Now()
 		flight := make(chan struct{})
 		c.flight = flight
 		c.mu.Unlock()
 
 		var err error
+		var snapshot listSnapshot
+		accepted := false
 		func() {
-			var snapshot listSnapshot
 			loaded := false
 			// Always wake waiters, including after cancellation, query errors or panic.
 			defer func() {
@@ -80,6 +88,8 @@ func (c *listCache) get(ctx context.Context, resource string, load func(context.
 				defer c.mu.Unlock()
 				if loaded && err == nil && ctx.Err() == nil && c.generation == generation {
 					c.snapshot, c.valid = snapshot, true
+					c.expiresAt = started.Add(uncertainListMaxAge)
+					accepted = true
 				}
 				close(flight)
 				c.flight = nil
@@ -91,14 +101,20 @@ func (c *listCache) get(ctx context.Context, resource string, load func(context.
 		if err != nil {
 			return listSnapshot{}, err
 		}
+		if accepted {
+			// Return even when the query outlived the cache interval. Future
+			// callers reload that expired snapshot instead of looping forever.
+			return snapshot, nil
+		}
 		// If a write committed during loading, discard the old result and reload.
 	}
 }
 
-func (c *listCache) invalidate(ctx context.Context, resource string) {
+func (c *listCache) invalidate(ctx context.Context, resource string, uncertain bool) {
 	c.mu.Lock()
 	c.generation++
 	c.valid, c.snapshot = false, listSnapshot{}
+	c.uncertain = c.uncertain || uncertain
 	generation := c.generation
 	c.mu.Unlock()
 	logging.FromContext(ctx).DebugContext(ctx, "列表可能已变更，内存缓存已失效，下次公开读取重新查询数据库", "component", "cache", "event", "lists.cache.invalidated", "resource", resource, "generation", generation)
@@ -116,7 +132,7 @@ func (c *listCache) afterWrite(ctx context.Context, resource string, err error) 
 			return
 		}
 	}
-	c.invalidate(ctx, resource)
+	c.invalidate(ctx, resource, err != nil)
 }
 
 func respondList(w http.ResponseWriter, r *http.Request, snapshot listSnapshot) {

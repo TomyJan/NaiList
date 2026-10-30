@@ -12,6 +12,8 @@ import { RefreshCw } from "lucide-react";
 import { releaseNotificationHost } from "./notificationHost";
 
 const Exiting = createContext(false);
+// Async work must stop when an exit starts, before retained content unmounts.
+export const useExiting = () => useContext(Exiting);
 const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 

@@ -7,10 +7,90 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"nailist/internal/groups"
 )
+
+func TestUncertainListCacheKeepsRefreshingAcrossLaterWrites(t *testing.T) {
+	for _, laterWrite := range []error{nil, groups.ErrDuplicate} {
+		t.Run(fmt.Sprint(laterWrite), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var cache listCache
+				rows := []string{"before"}
+				queries := 0
+				load := func(context.Context) (listSnapshot, error) { queries++; return encodeList(rows, nil) }
+				read := func(want string) {
+					t.Helper()
+					snapshot, err := cache.get(t.Context(), "groups", load)
+					if err != nil || string(snapshot.body) != want {
+						t.Fatalf("snapshot=%s err=%v, want %s", snapshot.body, err, want)
+					}
+				}
+				read("[\"before\"]\n")
+				cache.afterWrite(t.Context(), "groups", errors.New("commit outcome unknown"))
+				read("[\"before\"]\n")
+				// A later successful write or business rejection cannot prove that
+				// the original transaction has finished, even many intervals later.
+				for i := 0; i < 3; i++ {
+					time.Sleep(5 * time.Second)
+					cache.afterWrite(t.Context(), "groups", laterWrite)
+					read("[\"before\"]\n")
+				}
+				rows = []string{"late commit"}
+				read("[\"before\"]\n") // Keep coalescing reads within the interval.
+				time.Sleep(5 * time.Second)
+				read("[\"late commit\"]\n")
+				if queries != 6 {
+					t.Fatalf("queries=%d, want 6", queries)
+				}
+			})
+		})
+	}
+}
+
+func TestCertainListCacheRemainsPermanent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var cache listCache
+		queries := 0
+		load := func(context.Context) (listSnapshot, error) { queries++; return encodeList([]int{1}, nil) }
+		if _, err := cache.get(t.Context(), "sites", load); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(24 * time.Hour)
+		cache.afterWrite(t.Context(), "sites", groups.ErrDuplicate)
+		if _, err := cache.get(t.Context(), "sites", load); err != nil {
+			t.Fatal(err)
+		}
+		if queries != 1 {
+			t.Fatalf("certain cache unexpectedly refreshed: %d queries", queries)
+		}
+	})
+}
+
+func TestUncertainListCacheDoesNotExtendLifetimeWithSlowLoad(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var cache listCache
+		cache.afterWrite(t.Context(), "groups", errors.New("outcome unknown"))
+		queries := 0
+		load := func(context.Context) (listSnapshot, error) {
+			queries++
+			if queries == 1 {
+				time.Sleep(10 * time.Second)
+				return encodeList([]string{"before"}, nil)
+			}
+			return encodeList([]string{"after"}, nil)
+		}
+		if _, err := cache.get(t.Context(), "groups", load); err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := cache.get(t.Context(), "groups", load)
+		if err != nil || string(snapshot.body) != "[\"after\"]\n" {
+			t.Fatalf("slow old query extended cache lifetime: %s %v", snapshot.body, err)
+		}
+	})
+}
 
 func cacheTestContext(t *testing.T) context.Context {
 	t.Helper()
@@ -94,7 +174,7 @@ func TestListCacheDiscardsQueryInvalidatedDuringLoad(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	cache.invalidate(ctx, "groups")
+	cache.invalidate(ctx, "groups", false)
 	close(release)
 	select {
 	case snapshot := <-result:

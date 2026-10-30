@@ -165,15 +165,19 @@ func TestOIDCKeysBodyClientTimeoutSeverity(t *testing.T) {
 			f.mu.Lock()
 			f.nonce, f.verifier = "private-nonce", "private-verifier"
 			f.mu.Unlock()
+			releaseBody, handlerStopped := make(chan struct{}), make(chan struct{})
 			slow := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(handlerStopped)
 				if mode == "body" {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
 					w.(http.Flusher).Flush()
 				}
-				<-r.Context().Done()
+				// A clean server EOF must not race the client's timeout error.
+				<-releaseBody
 			}))
 			defer slow.Close()
+			defer close(releaseBody)
 			s := New(f.config(), nil, &memoryGroups{})
 			s.client = f.server.Client()
 			s.client.Timeout = 200 * time.Millisecond
@@ -186,6 +190,11 @@ func TestOIDCKeysBodyClientTimeoutSeverity(t *testing.T) {
 				return base.RoundTrip(r)
 			})
 			_, err := s.oidcIdentity(t.Context(), "code", "private-nonce", "private-verifier")
+			select {
+			case <-handlerStopped:
+				t.Fatal("keys fixture ended before the client observed timeout")
+			default:
+			}
 			if err == nil {
 				t.Fatal("interrupted keys response accepted")
 			}

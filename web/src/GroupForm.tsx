@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { MotionDialog } from "./motion";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { MotionDialog, useExiting } from "./motion";
 import { Upload, Undo2, X } from "lucide-react";
 import {
   extractJoinLink,
@@ -33,6 +33,7 @@ export function GroupForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const qrGeneration = useRef(0);
   const mounted = useRef(false);
+  const exiting = useExiting();
   const scope = ownership ? "admin" : "personal";
   const [original] = useState<GroupDraft>(() => ({
     ...initialGroupInput(group),
@@ -51,13 +52,18 @@ export function GroupForm({
   useEffect(() => {
     writeGroupDraft(accountID, group?.id, input, scope);
   }, [accountID, group?.id, input, scope]);
-  useEffect(() => {
-    mounted.current = true;
+  useLayoutEffect(() => {
+    mounted.current = !exiting;
     return () => {
       qrGeneration.current++;
       mounted.current = false;
     };
-  }, []);
+  }, [exiting]);
+  const close = () => {
+    qrGeneration.current++;
+    setReading(false);
+    onClose();
+  };
   const field = (key: keyof GroupInput, value: string) =>
     setInput((current) => ({ ...current, [key]: value }));
   const editLink = (value: string) => {
@@ -88,7 +94,7 @@ export function GroupForm({
       className="modal"
       onCancel={(e) => {
         if (busy) e.preventDefault();
-        else onClose();
+        else close();
       }}
       onClick={(e) => {
         if (e.target !== ref.current || busy) return;
@@ -99,7 +105,7 @@ export function GroupForm({
           e.clientY < bounds.top ||
           e.clientY > bounds.bottom
         )
-          onClose();
+          close();
       }}
       aria-labelledby="form-title"
     >
@@ -134,7 +140,7 @@ export function GroupForm({
             type="button"
             className="icon-button"
             aria-label="关闭"
-            onClick={onClose}
+            onClick={close}
             disabled={busy}
           >
             <X size={20} />
@@ -249,7 +255,7 @@ export function GroupForm({
           <button
             type="button"
             className="secondary"
-            onClick={onClose}
+            onClick={close}
             disabled={busy}
           >
             取消

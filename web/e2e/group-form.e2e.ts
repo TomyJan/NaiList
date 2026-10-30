@@ -454,6 +454,152 @@ for (const action of [
   });
 }
 
+for (const close of ["cancel", "x", "escape", "backdrop", "route"] as const) {
+  for (const result of ["success", "failure"] as const) {
+    test(`退出动画内 ${close}/${result} 的二维码完成不会改草稿或提示`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.addInitScript(() => {
+        const state = window as unknown as {
+          holdImage?: boolean;
+          releaseImage?: () => void;
+          qrCompleted: number;
+          heldDialog?: Element | null;
+          completedDuringExit?: boolean;
+        };
+        state.qrCompleted = 0;
+        const decode = Image.prototype.decode;
+        Image.prototype.decode = async function () {
+          await decode.call(this);
+          if (state.holdImage) {
+            state.heldDialog = document.querySelector("dialog");
+            await new Promise<void>((resolve) => {
+              state.releaseImage = resolve;
+            });
+          }
+        };
+        const revoke = URL.revokeObjectURL.bind(URL);
+        URL.revokeObjectURL = (url) => {
+          state.qrCompleted++;
+          if (state.heldDialog)
+            state.completedDuringExit = state.heldDialog.isConnected;
+          revoke(url);
+        };
+      });
+      await mockEditor(page);
+      await page.getByRole("button", { name: "添加奶群", exact: true }).click();
+      const file = page.locator('input[type="file"]');
+      await file.setInputFiles(
+        fileURLToPath(new URL("./fixtures/group-qr.png", import.meta.url)),
+      );
+      await expect(page.getByLabel("群链接")).toHaveValue(
+        "https://qm.qq.com/q/AjLVv044nu",
+      );
+      await page.getByRole("button", { name: "关闭提示" }).click();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      const manual = "https://qm.qq.com/q/manual";
+      await page.getByLabel("群链接").fill(manual);
+      await page.evaluate(() => {
+        Object.assign(window, { holdImage: true });
+      });
+      await file.setInputFiles(
+        fileURLToPath(
+          new URL(
+            result === "success"
+              ? "./fixtures/styled-group-qr.png"
+              : "./fixtures/other-qr.png",
+            import.meta.url,
+          ),
+        ),
+      );
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () =>
+              typeof (window as unknown as { releaseImage?: unknown })
+                .releaseImage,
+          ),
+        )
+        .toBe("function");
+      // Release in the close event's task, while Presence retains the dialog.
+      // Escape uses the actual native cancel event; other paths use real clicks.
+      if (close === "escape") {
+        await page.evaluate(() => {
+          document.querySelector("dialog")!.addEventListener(
+            "cancel",
+            () => {
+              queueMicrotask(() =>
+                (
+                  window as unknown as { releaseImage: () => void }
+                ).releaseImage(),
+              );
+            },
+            { once: true },
+          );
+        });
+        await page.keyboard.press("Escape");
+      } else {
+        await page.evaluate((action) => {
+          const dialog = document.querySelector("dialog")!;
+          if (action === "cancel")
+            Array.from(dialog.querySelectorAll("button"))
+              .find((button) => button.textContent?.trim() === "取消")!
+              .click();
+          else if (action === "x")
+            (
+              dialog.querySelector(
+                'button[aria-label="关闭"]',
+              ) as HTMLButtonElement
+            ).click();
+          else if (action === "backdrop")
+            dialog.dispatchEvent(
+              new MouseEvent("click", {
+                bubbles: true,
+                clientX: 1,
+                clientY: 1,
+              }),
+            );
+          else {
+            history.pushState(null, "", "/");
+            dispatchEvent(new PopStateEvent("popstate"));
+          }
+          (window as unknown as { releaseImage: () => void }).releaseImage();
+        }, close);
+      }
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => (window as unknown as { qrCompleted: number }).qrCompleted,
+          ),
+        )
+        .toBe(2);
+      if (close !== "route")
+        expect(
+          await page.evaluate(
+            () =>
+              (window as unknown as { completedDuringExit: boolean })
+                .completedDuringExit,
+          ),
+        ).toBe(true);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      if (close === "route") {
+        await page.getByRole("button", { name: "账户菜单" }).click();
+        await page.getByRole("menuitem", { name: "管理奶表" }).click();
+      }
+      await page.getByRole("button", { name: "添加奶群", exact: true }).click();
+      await expect(page.getByLabel("群链接")).toHaveValue(manual);
+      expect(
+        await page.evaluate(
+          () =>
+            JSON.parse(sessionStorage.getItem("nailist:draft:1:new")!).joinUrl,
+        ),
+      ).toBe(manual);
+    });
+  }
+}
+
 test("前端校验拦截非法输入，不发写入请求", async ({ page }) => {
   const state = await mockEditor(page);
   await page.getByRole("button", { name: "添加奶群" }).click();
