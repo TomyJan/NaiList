@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./fixtures";
 
+test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
+
 async function setup(page: Page) {
   await page.route("http://umami.test/**", (route) =>
     route.fulfill({ body: "" }),
@@ -39,6 +41,50 @@ const navOffset = (page: Page) =>
   page
     .locator(".nav")
     .evaluate((element) => element.getBoundingClientRect().top);
+
+test.describe("弹窗滚动条占位", () => {
+  test("锁定滚动的浏览器中，弹窗开关不改变页面和固定浮层的横向位置", async ({
+    page,
+  }) => {
+    await setup(page);
+    // 模拟会在原生模态框打开期间隐藏根滚动条的浏览器。
+    await page.addStyleTag({
+      content: ":root:has(dialog:modal) { overflow-y: hidden; }",
+    });
+    const measure = () =>
+      page.evaluate(() =>
+        ["#root", ".nav-inner", ".cookie-notice"].map((selector) => {
+          const { x, width } = document
+            .querySelector(selector)!
+            .getBoundingClientRect();
+          return { x, width };
+        }),
+      );
+
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollHeight > innerHeight,
+          ),
+        )
+        .toBe(true);
+      const before = await measure();
+      await page.getByRole("button", { name: "登录", exact: true }).click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      expect(await measure()).toEqual(before);
+      await page.keyboard.press("Escape");
+      await expect(page.locator("dialog")).toHaveCount(0);
+      expect(await measure()).toEqual(before);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+    }
+  });
+});
 
 test("顶栏按滚动距离逐步收起和露出，停止滚动不会自行完成动画", async ({
   page,

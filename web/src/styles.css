@@ -1,5 +1,6 @@
 :root {
   color-scheme: light dark;
+  scrollbar-gutter: stable;
   font-family: MiSans, "Microsoft YaHei", system-ui, sans-serif;
   color: #2b271c;
   background: #fdfaf3;

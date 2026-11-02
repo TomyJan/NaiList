@@ -76,8 +76,12 @@ test("复制提示可堆叠、居中、关闭，适配手机和系统主题", as
       return { x: box.x, y: box.y, width: box.width, bottom: box.bottom };
     }),
   );
+  const center = await page.locator("body").evaluate((body) => {
+    const { x, width } = body.getBoundingClientRect();
+    return x + width / 2;
+  });
   for (const box of positions) {
-    expect(Math.abs(box.x + box.width / 2 - 195)).toBeLessThan(2);
+    expect(Math.abs(box.x + box.width / 2 - center)).toBeLessThan(2);
     expect(box.bottom).toBeLessThanOrEqual(844);
   }
   expect(new Set(positions.map((box) => box.y)).size).toBe(3);
@@ -98,7 +102,11 @@ test("复制提示可堆叠、居中、关闭，适配手机和系统主题", as
       toasts.first().evaluate((node) => getComputedStyle(node).backgroundColor),
     )
     .not.toBe(before);
-  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  expect(
+    await page
+      .locator("body")
+      .evaluate((body) => body.scrollWidth <= body.clientWidth),
+  ).toBe(true);
   expect(errors).toEqual([]);
 });
 

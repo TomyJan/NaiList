@@ -44,9 +44,9 @@ test("政策可从页脚访问和直接刷新，标题与窄屏排版正确", as
   await expect(page).toHaveTitle("隐私政策 - NaiList");
   await expect(page.getByRole("main")).toContainText("localStorage");
   await expect(page.getByRole("main")).toContainText("Umami");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
-    320,
-  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
   await page.screenshot({
     path: `../.superpowers/evidence/privacy-${test.info().project.name}.png`,
   });
@@ -217,7 +217,7 @@ test("手机提示和登录可操作，通知显示在 Cookie 提示上方", asy
   await page.screenshot({
     path: `../.superpowers/evidence/legal-login-${test.info().project.name}.png`,
   });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
-    320,
-  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
 });
