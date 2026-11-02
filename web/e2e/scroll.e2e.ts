@@ -26,6 +26,16 @@ async function setup(page: Page) {
   });
   await page.goto("/");
   await expect(page.locator(".group-row")).toHaveCount(60);
+  await expect(
+    page.getByRole("button", { name: "登录", exact: true }),
+  ).toBeVisible();
+  // 列表和登录按钮渲染后仍会加载字体；换字会触发重排及滚动锚定。
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
 }
 
 async function scroll(page: Page, y: number) {
