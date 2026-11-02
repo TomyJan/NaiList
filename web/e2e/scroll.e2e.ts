@@ -47,10 +47,14 @@ test.describe("弹窗滚动条占位", () => {
     page,
   }) => {
     await setup(page);
-    // 模拟会在原生模态框打开期间隐藏根滚动条的浏览器。
-    await page.addStyleTag({
-      content: ":root:has(dialog:modal) { overflow-y: hidden; }",
-    });
+    // 使用同源外部样式模拟滚动锁定，兼容实际后端的 CSP。
+    await page.route("**/__e2e__/modal-scroll-lock.css", (route) =>
+      route.fulfill({
+        contentType: "text/css",
+        body: ":root:has(dialog:modal) { overflow-y: hidden; }",
+      }),
+    );
+    await page.addStyleTag({ url: "/__e2e__/modal-scroll-lock.css" });
     const measure = () =>
       page.evaluate(() =>
         ["#root", ".nav-inner", ".cookie-notice"].map((selector) => {
@@ -73,6 +77,7 @@ test.describe("弹窗滚动条占位", () => {
       const before = await measure();
       await page.getByRole("button", { name: "登录", exact: true }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.locator("html")).toHaveCSS("overflow-y", "hidden");
       expect(await measure()).toEqual(before);
       await page.keyboard.press("Escape");
       await expect(page.locator("dialog")).toHaveCount(0);
