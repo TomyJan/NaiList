@@ -8,6 +8,14 @@ export const projectRoot = resolve(
   "..",
 );
 
+export function buildCommit(root = projectRoot) {
+  return execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+
 export function buildVersion(root = projectRoot) {
   const { version } = JSON.parse(
     readFileSync(resolve(root, "web/package.json"), "utf8"),
@@ -22,7 +30,7 @@ export function buildVersion(root = projectRoot) {
   const tags = git("tag", "--points-at", "HEAD").split("\n");
   return tags.includes(`v${version}`)
     ? version
-    : `${version}-${git("rev-parse", "--short=7", "HEAD")}`;
+    : `${version}-${buildCommit(root).slice(0, 7)}`;
 }
 
 if (

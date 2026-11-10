@@ -8,6 +8,7 @@ RUN pnpm run build
 
 FROM golang:1.27.3-alpine AS backend
 ARG BUILD_VERSION
+ARG BUILD_COMMIT
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -17,7 +18,8 @@ COPY migrations/ ./migrations/
 COPY web/assets.go ./web/assets.go
 COPY --from=frontend /src/web/dist/ ./web/dist/
 RUN test -n "$BUILD_VERSION" \
-    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.buildVersion=$BUILD_VERSION" -o /nailist ./cmd/server
+    && echo "$BUILD_COMMIT" | grep -Eq '^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$' \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.buildVersion=$BUILD_VERSION -X main.buildCommit=$BUILD_COMMIT" -o /nailist ./cmd/server
 
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \

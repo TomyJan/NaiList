@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildVersion } from "./build-version.mjs";
+import { buildCommit, buildVersion } from "./build-version.mjs";
 
 test("编译版本：非标签提交附短 hash，精确版本标签省略 hash", (t) => {
   const root = mkdtempSync(join(tmpdir(), "nailist-build-"));
@@ -31,8 +31,9 @@ test("编译版本：非标签提交附短 hash，精确版本标签省略 hash"
   );
   assert.equal(
     buildVersion(root),
-    `0.1.1-${git("rev-parse", "--short=7", "HEAD")}`,
+    `0.1.1-${git("rev-parse", "HEAD").slice(0, 7)}`,
   );
+  assert.equal(buildCommit(root), git("rev-parse", "HEAD"));
   git("tag", "v0.1.1");
   assert.equal(buildVersion(root), "0.1.1");
   git(
@@ -49,7 +50,7 @@ test("编译版本：非标签提交附短 hash，精确版本标签省略 hash"
   );
   assert.equal(
     buildVersion(root),
-    `0.1.1-${git("rev-parse", "--short=7", "HEAD")}`,
+    `0.1.1-${git("rev-parse", "HEAD").slice(0, 7)}`,
   );
   git("checkout", "--detach", "v0.1.1");
   assert.equal(buildVersion(root), "0.1.1");

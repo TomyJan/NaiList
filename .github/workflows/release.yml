@@ -291,6 +291,7 @@ jobs:
           push: true
           build-args: |
             BUILD_VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_COMMIT=${{ needs.prepare.outputs.sha }}
           tags: |
             ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.tag }}
             ${{ needs.prepare.outputs.image }}:latest

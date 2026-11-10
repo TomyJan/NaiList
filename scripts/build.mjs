@@ -1,14 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { buildVersion, projectRoot } from "./build-version.mjs";
+import { buildCommit, buildVersion, projectRoot } from "./build-version.mjs";
 
 const version = buildVersion();
+const commit = buildCommit();
 const result = spawnSync(
   "go",
   [
     "build",
     "-trimpath",
     "-ldflags",
-    `-s -w -X main.buildVersion=${version}`,
+    `-s -w -X main.buildVersion=${version} -X main.buildCommit=${commit}`,
     ...process.argv.slice(2),
     "./cmd/server",
   ],

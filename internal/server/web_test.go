@@ -10,7 +10,7 @@ import (
 )
 
 func TestStartupWebInjection(t *testing.T) {
-	cfg := Config{Version: "0.1.1-abcdef0", UmamiScriptURL: "https://stats.example.com/script.js?x=1&y=2", UmamiWebsiteID: "00000000-0000-0000-0000-000000000001"}
+	cfg := Config{Version: "0.1.1-abcdef0", Commit: "abcdef0123456789abcdef0123456789abcdef01", UmamiScriptURL: "https://stats.example.com/script.js?x=1&y=2", UmamiWebsiteID: "00000000-0000-0000-0000-000000000001"}
 	handler := New(cfg, nil, &memoryGroups{}).Routes()
 	// Runtime configuration is captured at construction, not read on each request.
 	t.Setenv("UMAMI_SCRIPT_URL", "https://changed.example.com/script.js")
@@ -19,6 +19,9 @@ func TestStartupWebInjection(t *testing.T) {
 		out := httptest.NewRecorder()
 		handler.ServeHTTP(out, httptest.NewRequest("GET", route, nil))
 		body := out.Body.String()
+		if !strings.Contains(body, `name="nailist-commit" content="abcdef0123456789abcdef0123456789abcdef01"`) {
+			t.Fatalf("%s: full build commit missing from page", route)
+		}
 		if out.Code != 200 || !strings.Contains(body, `name="nailist-version" content="0.1.1-abcdef0"`) || !strings.Contains(body, `src="`+html.EscapeString(cfg.UmamiScriptURL)+`"`) || !strings.Contains(body, `data-website-id="`+cfg.UmamiWebsiteID+`"`) || strings.Contains(body, "__NAILIST_RUNTIME__") || strings.Contains(body, "changed.example.com") {
 			t.Fatalf("%s: %d %s", route, out.Code, body)
 		}

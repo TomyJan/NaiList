@@ -25,6 +25,7 @@ import (
 type Config struct {
 	PublicURL, QQAppID, QQAppKey            string
 	Version, UmamiScriptURL, UmamiWebsiteID string
+	Commit                                  string
 	UmamiShareURL                           string
 	QQUseUnionID                            bool
 	OIDC                                    OIDCConfig

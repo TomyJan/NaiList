@@ -238,4 +238,4 @@ jobs:
           PUBLIC_URL: https://groups.example.com
         run: docker compose config --quiet
       - name: Build container
-        run: docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" --tag nailist:ci .
+        run: docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" --build-arg BUILD_COMMIT="$GITHUB_SHA" --tag nailist:ci .

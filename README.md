@@ -133,12 +133,12 @@ go run ./cmd/server
 node scripts/build.mjs -o nailist
 ```
 
-构建脚本将版本固定进二进制：首页页脚和 `--version` 一致。当前提交有对应 `vX.Y.Z` 标签时显示 `X.Y.Z`，否则显示 `X.Y.Z-短hash`；运行时无需 Git，移动二进制或修改配置不会改变版本。构建前须保留 Git 元数据和标签（CI 已配置完整检出）。直接 `go run` 用于开发，可能显示 `-dev`。
+构建脚本将版本和完整提交号固定进二进制：首页页脚和 `--version` 一致。当前提交有对应 `vX.Y.Z` 标签时显示 `X.Y.Z`，否则显示 `X.Y.Z-短hash`，其中短 hash 固定为前 7 位；页脚版本链接指向完整提交号。运行时无需 Git，移动二进制或修改配置不会改变版本。构建前须保留 Git 元数据和标签（CI 已配置完整检出）。直接 `go run` 用于开发，可能显示 `-dev`。
 
 自行构建 Docker 镜像时传入同一编译版本：
 
 ```sh
-docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" -t nailist:local .
+docker build --build-arg BUILD_VERSION="$(node scripts/build-version.mjs)" --build-arg BUILD_COMMIT="$(git rev-parse HEAD)" -t nailist:local .
 ```
 
 访问 `PUBLIC_URL`。前端开发模式：后端设置 `PORT=8080`、`PUBLIC_URL=http://127.0.0.1:5173`，在 `web` 目录运行 `pnpm run dev` 并访问该地址，API 会代理到 `localhost:8080`。登录回调须与浏览器访问地址一致；QQ 应用还需允许该开发回调。完整验证命令和测试环境见 [开发与验证](docs/development.md)。

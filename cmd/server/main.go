@@ -101,6 +101,7 @@ func run(ctx context.Context, output io.Writer) (err error) {
 		return err
 	}
 	cfg.Version = version
+	cfg.Commit = applicationCommit()
 	cfg.UmamiScriptURL = os.Getenv("UMAMI_SCRIPT_URL")
 	cfg.UmamiWebsiteID = os.Getenv("UMAMI_WEBSITE_ID")
 	cfg.UmamiShareURL = strings.TrimSpace(os.Getenv("UMAMI_SHARE_URL"))

@@ -59,6 +59,7 @@ func newWebHandler(cfg Config) (http.Handler, string) {
 		slog.Error("前端运行配置无效", "error", configErr)
 	}
 	runtimeHTML := `<meta name="nailist-version" content="` + html.EscapeString(cfg.Version) + `" />`
+	runtimeHTML += `<meta name="nailist-commit" content="` + html.EscapeString(cfg.Commit) + `" />`
 	if strings.TrimSpace(cfg.UmamiShareURL) != "" && configErr == nil {
 		runtimeHTML += `<meta name="nailist-traffic" content="enabled" />`
 	}

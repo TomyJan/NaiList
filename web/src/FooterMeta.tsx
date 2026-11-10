@@ -1,4 +1,4 @@
-import { SITE_VERSION } from "./runtime";
+import { SITE_VERSION, SITE_VERSION_URL } from "./runtime";
 import { useWrappingSeparators } from "./useWrappingSeparators";
 
 export function FooterMeta() {
@@ -13,11 +13,7 @@ export function FooterMeta() {
         </a>
       </span>
       <span className="footer-version">
-        <a
-          href="https://github.com/TomyJan/NaiList"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href={SITE_VERSION_URL} target="_blank" rel="noopener noreferrer">
           V{SITE_VERSION}
         </a>
       </span>
