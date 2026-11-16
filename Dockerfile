@@ -6,7 +6,7 @@ RUN npm install --global "$(node -p 'require("./package.json").packageManager')"
 COPY web/ ./
 RUN pnpm run build
 
-FROM golang:1.27.3-alpine AS backend
+FROM golang:1.27.4-alpine AS backend
 ARG BUILD_VERSION
 ARG BUILD_COMMIT
 WORKDIR /src
